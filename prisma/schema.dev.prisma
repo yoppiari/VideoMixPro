@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client-dev"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL_DEV")
+}
+
+// SQLite doesn't support ENUMs, so we use String with @db.Text
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  password      String
+  firstName     String        @map("first_name")
+  lastName      String        @map("last_name")
+  isActive      Boolean       @default(true) @map("is_active")
+  credits       Int           @default(0)
+  licenseType   String        @default("FREE") @map("license_type")
+  licenseExpiry DateTime?     @map("license_expiry")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  projects          Project[]
+  creditTransactions CreditTransaction[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  userId      String        @map("user_id")
+  status      String        @default("DRAFT")
+  outputCount Int           @default(0) @map("output_count")
+  settings    String        // JSON stored as string in SQLite
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoFiles   VideoFile[]
+  videoGroups  VideoGroup[]
+  processingJobs ProcessingJob[]
+
+  @@map("projects")
+}
+
+model VideoGroup {
+  id        String @id @default(cuid())
+  name      String
+  order     Int
+  projectId String @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  videoFiles VideoFile[]
+
+  @@map("video_groups")
+}
+
+model VideoFile {
+  id           String   @id @default(cuid())
+  originalName String   @map("original_name")
+  filename     String
+  path         String
+  size         Int
+  duration     Float
+  format       String
+  resolution   String
+  projectId    String   @map("project_id")
+  groupId      String?  @map("group_id")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group   VideoGroup? @relation(fields: [groupId], references: [id])
+
+  @@map("video_files")
+}
+
+model ProcessingJob {
+  id           String    @id @default(cuid())
+  projectId    String    @map("project_id")
+  status       String    @default("PENDING")
+  progress     Int       @default(0)
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  outputFiles OutputFile[]
+
+  @@map("processing_jobs")
+}
+
+model OutputFile {
+  id          String   @id @default(cuid())
+  jobId       String   @map("job_id")
+  filename    String
+  path        String
+  size        Int
+  duration    Float
+  metadata    String   // JSON stored as string in SQLite
+  sourceFiles String   @map("source_files") // JSON stored as string
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  job ProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("output_files")
+}
+
+model CreditTransaction {
+  id          String          @id @default(cuid())
+  userId      String          @map("user_id")
+  amount      Int
+  type        String          // TransactionType as string
+  description String
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_transactions")
+}

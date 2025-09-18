@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npm install)",
+      "Bash(psql:*)",
+      "Bash(redis-cli:*)",
+      "Bash(docker:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)",
+      "Bash(npx eslint:*)",
+      "Bash(dir:*)",
+      "Bash(where psql)",
+      "Bash(powershell.exe:*)",
+      "Bash(cmd /c:*)",
+      "Bash(wsl:*)",
+      "Bash(where redis-cli)",
+      "Bash(where:*)",
+      "Bash(npm install:*)",
+      "Bash(copy .env.development .env)",
+      "Bash(curl:*)",
+      "Bash(findstr:*)",
+      "Bash(npx create-react-app:*)",
+      "Bash(npx tailwindcss init:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(del nul)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
