@@ -29,11 +29,25 @@ videoProcessingQueue.process('mix-videos', 5, async (job) => {
 
   try {
     await videoProcessingService.queueProcessingJob(jobId, data);
-    logger.info(`Video processing job ${jobId} completed`);
+    logger.info(`Video processing job ${jobId} completed successfully`);
     return { success: true, jobId };
   } catch (error) {
-    logger.error(`Video processing job ${jobId} failed:`, error);
-    throw error;
+    // Extract detailed error information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : '';
+
+    logger.error(`Video processing job ${jobId} failed:`, {
+      message: errorMessage,
+      stack: errorStack,
+      jobData: data
+    });
+
+    // Re-throw with enhanced error message for better debugging
+    const enhancedError = new Error(`Job ${jobId} failed: ${errorMessage}`);
+    if (error instanceof Error) {
+      enhancedError.stack = error.stack;
+    }
+    throw enhancedError;
   }
 });
 
@@ -131,15 +145,43 @@ videoProcessingQueue.process('concatenate-videos', 3, async (job) => {
 
 // Queue event handlers
 videoProcessingQueue.on('completed', (job, result) => {
-  logger.info(`Job ${job.id} completed with result:`, result);
+  logger.info(`Job ${job.id} completed successfully`, {
+    jobName: job.name,
+    result: result
+  });
 });
 
 videoProcessingQueue.on('failed', (job, err) => {
-  logger.error(`Job ${job.id} failed:`, err);
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  const errorStack = err instanceof Error ? err.stack : '';
+
+  logger.error(`Job ${job.id} failed`, {
+    jobName: job.name,
+    error: errorMessage,
+    stack: errorStack,
+    attempts: job.attemptsMade,
+    data: job.data
+  });
 });
 
 videoProcessingQueue.on('stalled', (job) => {
-  logger.warn(`Job ${job.id} stalled`);
+  logger.warn(`Job ${job.id} stalled`, {
+    jobName: job.name,
+    data: job.data
+  });
+});
+
+videoProcessingQueue.on('error', (error) => {
+  logger.error('Queue error occurred:', {
+    error: error.message,
+    stack: error.stack
+  });
+});
+
+videoProcessingQueue.on('active', (job) => {
+  logger.info(`Job ${job.id} started processing`, {
+    jobName: job.name
+  });
 });
 
 // Export queue for use in controllers

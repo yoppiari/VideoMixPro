@@ -1,13 +1,11 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/utils/database';
 import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper } from '@/utils/response';
 import { VideoService } from '@/services/video.service';
 import logger from '@/utils/logger';
 import path from 'path';
 import fs from 'fs/promises';
-
-const prisma = new PrismaClient();
 const videoService = new VideoService();
 
 export class VideoController {
@@ -221,6 +219,133 @@ export class VideoController {
     } catch (error) {
       logger.error('Get video metadata error:', error);
       ResponseHelper.serverError(res, 'Failed to get video metadata');
+    }
+  }
+
+  async assignVideoToGroup(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      const { videoId } = req.params;
+      const { groupId } = req.body;
+
+      // Verify video ownership
+      const video = await prisma.videoFile.findFirst({
+        where: {
+          id: videoId,
+          project: { userId }
+        },
+        include: {
+          project: true
+        }
+      });
+
+      if (!video) {
+        ResponseHelper.notFound(res, 'Video not found');
+        return;
+      }
+
+      // If groupId is provided, verify group exists in same project
+      if (groupId) {
+        const group = await prisma.videoGroup.findFirst({
+          where: {
+            id: groupId,
+            projectId: video.projectId
+          }
+        });
+
+        if (!group) {
+          ResponseHelper.notFound(res, 'Group not found in this project');
+          return;
+        }
+      }
+
+      // Update video's group assignment
+      const updatedVideo = await prisma.videoFile.update({
+        where: { id: videoId },
+        data: { groupId: groupId || null },
+        include: {
+          group: true
+        }
+      });
+
+      ResponseHelper.success(res, updatedVideo, 'Video group assignment updated');
+    } catch (error) {
+      logger.error('Assign video to group error:', error);
+      ResponseHelper.serverError(res, 'Failed to assign video to group');
+    }
+  }
+
+  async bulkAssignVideosToGroup(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      const { videoIds, groupId } = req.body;
+
+      if (!Array.isArray(videoIds) || videoIds.length === 0) {
+        ResponseHelper.error(res, 'Video IDs must be provided as an array');
+        return;
+      }
+
+      // Verify all videos belong to user
+      const videos = await prisma.videoFile.findMany({
+        where: {
+          id: { in: videoIds },
+          project: { userId }
+        }
+      });
+
+      if (videos.length !== videoIds.length) {
+        ResponseHelper.error(res, 'Some videos not found or not authorized');
+        return;
+      }
+
+      // Get project ID from first video
+      const projectId = videos[0].projectId;
+
+      // Verify all videos are from same project
+      const sameProject = videos.every(v => v.projectId === projectId);
+      if (!sameProject) {
+        ResponseHelper.error(res, 'All videos must be from the same project');
+        return;
+      }
+
+      // If groupId is provided, verify group exists
+      if (groupId) {
+        const group = await prisma.videoGroup.findFirst({
+          where: {
+            id: groupId,
+            projectId
+          }
+        });
+
+        if (!group) {
+          ResponseHelper.notFound(res, 'Group not found in this project');
+          return;
+        }
+      }
+
+      // Bulk update videos
+      const result = await prisma.videoFile.updateMany({
+        where: { id: { in: videoIds } },
+        data: { groupId: groupId || null }
+      });
+
+      ResponseHelper.success(res, {
+        updated: result.count,
+        groupId: groupId || null
+      }, `${result.count} videos updated`);
+    } catch (error) {
+      logger.error('Bulk assign videos error:', error);
+      ResponseHelper.serverError(res, 'Failed to bulk assign videos to group');
     }
   }
 }

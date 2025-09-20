@@ -1,84 +1,168 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: videomixpro_db
     environment:
-      POSTGRES_USER: videomixpro
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: videomixpro
+      POSTGRES_USER: ${POSTGRES_USER:-videomixpro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+      POSTGRES_DB: ${POSTGRES_DB:-videomixpro}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - videomixpro-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U videomixpro"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-videomixpro}"]
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
 
+  # Redis for Queue Management
   redis:
     image: redis:7-alpine
     container_name: videomixpro_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - videomixpro-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
 
+  # Backend API
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
     container_name: videomixpro_api
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://videomixpro:password123@postgres:5432/videomixpro
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET}
-      UPLOAD_PATH: /app/uploads
-      OUTPUT_DIR: /app/outputs
+      DATABASE_URL: postgresql://${POSTGRES_USER:-videomixpro}:${POSTGRES_PASSWORD:-password123}@postgres:5432/${POSTGRES_DB:-videomixpro}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-this}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@videomixpro.com}
+      FROM_NAME: ${FROM_NAME:-VideoMixPro}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@videomixpro.com}
     volumes:
-      - ./uploads:/app/uploads
-      - ./outputs:/app/outputs
-      - ./logs:/app/logs
+      - uploads_data:/app/uploads
+      - outputs_data:/app/outputs
+      - logs_data:/app/logs
+      - receipts_data:/app/receipts
+      - invoices_data:/app/invoices
+      - backups_data:/app/backups
+    networks:
+      - videomixpro-network
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: videomixpro_frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3000}
+      REACT_APP_WS_URL: ${REACT_APP_WS_URL:-ws://localhost:3000}
+    networks:
+      - videomixpro-network
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Background Worker
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
     container_name: videomixpro_worker
-    command: npm run queue:dev
+    command: ["npm", "run", "queue:prod"]
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://videomixpro:password123@postgres:5432/videomixpro
-      REDIS_URL: redis://redis:6379
-      UPLOAD_PATH: /app/uploads
-      OUTPUT_DIR: /app/outputs
+      DATABASE_URL: postgresql://${POSTGRES_USER:-videomixpro}:${POSTGRES_PASSWORD:-password123}@postgres:5432/${POSTGRES_DB:-videomixpro}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-this}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@videomixpro.com}
+      FROM_NAME: ${FROM_NAME:-VideoMixPro}
     volumes:
-      - ./uploads:/app/uploads
-      - ./outputs:/app/outputs
-      - ./logs:/app/logs
+      - uploads_data:/app/uploads
+      - outputs_data:/app/outputs
+      - logs_data:/app/logs
+    networks:
+      - videomixpro-network
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+  outputs_data:
+    driver: local
+  logs_data:
+    driver: local
+  receipts_data:
+    driver: local
+  invoices_data:
+    driver: local
+  backups_data:
+    driver: local
+
+networks:
+  videomixpro-network:
+    driver: bridge

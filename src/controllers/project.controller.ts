@@ -1,11 +1,9 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma, database } from '@/utils/database';
 import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper, createPagination } from '@/utils/response';
 import { ProjectStatus } from '@/types';
 import logger from '@/utils/logger';
-
-const prisma = new PrismaClient();
 
 export class ProjectController {
   async getProjects(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -16,8 +14,10 @@ export class ProjectController {
         return;
       }
 
-      const { page, limit } = req.query as any;
-      const skip = (page - 1) * limit;
+      const { page = '1', limit = '10' } = req.query as any;
+      const pageNum = parseInt(page, 10);
+      const limitNum = parseInt(limit, 10);
+      const skip = (pageNum - 1) * limitNum;
 
       const [projects, total] = await Promise.all([
         prisma.project.findMany({
@@ -37,14 +37,20 @@ export class ProjectController {
           },
           orderBy: { updatedAt: 'desc' },
           skip,
-          take: limit
+          take: limitNum
         }),
         prisma.project.count({ where: { userId } })
       ]);
 
-      const pagination = createPagination(page, limit, total);
+      const pagination = createPagination(pageNum, limitNum, total);
 
-      ResponseHelper.success(res, projects, 'Projects retrieved successfully', 200, pagination);
+      // Parse settings for each project
+      const projectsWithParsedSettings = projects.map(project => ({
+        ...project,
+        settings: database.parseJson(project.settings)
+      }));
+
+      ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get projects error:', error);
       ResponseHelper.serverError(res, 'Failed to get projects');
@@ -85,7 +91,13 @@ export class ProjectController {
         return;
       }
 
-      ResponseHelper.success(res, project);
+      // Parse settings before sending response
+      const projectWithParsedSettings = {
+        ...project,
+        settings: database.parseJson(project.settings)
+      };
+
+      ResponseHelper.success(res, projectWithParsedSettings);
     } catch (error) {
       logger.error('Get project error:', error);
       ResponseHelper.serverError(res, 'Failed to get project');
@@ -107,7 +119,7 @@ export class ProjectController {
           name,
           description,
           userId,
-          settings,
+          settings: database.stringifyJson(settings),
           status: ProjectStatus.DRAFT
         },
         include: {
@@ -130,7 +142,13 @@ export class ProjectController {
         );
       }
 
-      ResponseHelper.success(res, project, 'Project created successfully', 201);
+      // Parse settings back to object before sending response
+      const responseProject = {
+        ...project,
+        settings: database.parseJson(project.settings)
+      };
+
+      ResponseHelper.success(res, responseProject, 'Project created successfully', 201);
     } catch (error) {
       logger.error('Create project error:', error);
       ResponseHelper.serverError(res, 'Failed to create project');
@@ -168,7 +186,7 @@ export class ProjectController {
         data: {
           ...(name && { name }),
           ...(description !== undefined && { description }),
-          ...(settings && { settings })
+          ...(settings && { settings: database.stringifyJson(settings) })
         },
         include: {
           videoFiles: true,
@@ -176,7 +194,13 @@ export class ProjectController {
         }
       });
 
-      ResponseHelper.success(res, project, 'Project updated successfully');
+      // Parse settings before sending response
+      const projectWithParsedSettings = {
+        ...project,
+        settings: database.parseJson(project.settings)
+      };
+
+      ResponseHelper.success(res, projectWithParsedSettings, 'Project updated successfully');
     } catch (error) {
       logger.error('Update project error:', error);
       ResponseHelper.serverError(res, 'Failed to update project');

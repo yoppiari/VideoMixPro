@@ -7,11 +7,14 @@ const processingController = new ProcessingController();
 
 router.use(authenticateToken);
 
-router.post('/start/:projectId', processingController.startProcessing);
-router.get('/status/:jobId', processingController.getJobStatus);
-router.post('/cancel/:jobId', processingController.cancelJob);
-router.get('/jobs', processingController.getUserJobs);
-router.get('/outputs/:jobId', processingController.getJobOutputs);
-router.get('/download/:outputId', processingController.downloadOutput);
+router.post('/start/:projectId', processingController.startProcessing.bind(processingController));
+router.get('/status/:jobId', processingController.getJobStatus.bind(processingController));
+router.get('/job/:jobId/details', processingController.getJobDetails.bind(processingController));
+router.post('/cancel/:jobId', processingController.cancelJob.bind(processingController));
+router.post('/credits-estimate', processingController.getCreditsEstimate.bind(processingController));
+router.get('/jobs', processingController.getUserJobs.bind(processingController));
+router.get('/project/:projectId/jobs', processingController.getProjectJobs.bind(processingController));
+router.get('/outputs/:jobId', processingController.getJobOutputs.bind(processingController));
+router.get('/download/:outputId', processingController.downloadOutput.bind(processingController));
 
 export default router;

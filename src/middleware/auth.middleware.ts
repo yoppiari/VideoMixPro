@@ -1,17 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/utils/database';
 import { AuthTokenPayload } from '@/types';
 import { ResponseHelper } from '@/utils/response';
 import logger from '@/utils/logger';
-
-const prisma = new PrismaClient();
 
 export interface AuthenticatedRequest extends Request {
   user?: AuthTokenPayload;
 }
 
-export const authenticateToken = async (
+export const authMiddleware = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -39,6 +37,9 @@ export const authenticateToken = async (
       select: {
         id: true,
         email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
         isActive: true,
         licenseType: true,
         licenseExpiry: true
@@ -55,7 +56,10 @@ export const authenticateToken = async (
       return;
     }
 
-    req.user = decoded;
+    req.user = {
+      ...decoded,
+      email: user.email,
+    } as any;
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -67,3 +71,6 @@ export const authenticateToken = async (
     ResponseHelper.serverError(res, 'Authentication failed');
   }
 };
+
+// Backward compatibility
+export const authenticateToken = authMiddleware;

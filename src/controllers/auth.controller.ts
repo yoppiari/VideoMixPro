@@ -1,12 +1,10 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import { ResponseHelper } from '@/utils/response';
 import { AuthTokenPayload, LicenseType } from '@/types';
+import { database, prisma } from '@/utils/database';
 import logger from '@/utils/logger';
-
-const prisma = new PrismaClient();
 
 export class AuthController {
   async register(req: Request, res: Response): Promise<void> {
@@ -145,6 +143,43 @@ export class AuthController {
 
   async logout(req: Request, res: Response): Promise<void> {
     ResponseHelper.success(res, null, 'Logout successful');
+  }
+
+  async getProfile(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.userId;
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          credits: true,
+          licenseType: true,
+          licenseExpiry: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      if (!user || !user.isActive) {
+        ResponseHelper.unauthorized(res, 'User not found or inactive');
+        return;
+      }
+
+      ResponseHelper.success(res, user, 'Profile retrieved successfully');
+    } catch (error) {
+      logger.error('Get profile error:', error);
+      ResponseHelper.serverError(res, 'Failed to retrieve profile');
+    }
   }
 
   async verifyLicense(req: Request, res: Response): Promise<void> {

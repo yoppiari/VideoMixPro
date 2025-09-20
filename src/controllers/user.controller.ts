@@ -1,11 +1,9 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/utils/database';
 import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper, createPagination } from '@/utils/response';
 import { TransactionType } from '@/types';
 import logger from '@/utils/logger';
-
-const prisma = new PrismaClient();
 
 export class UserController {
   async getProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -159,22 +157,24 @@ export class UserController {
         return;
       }
 
-      const { page, limit } = req.query as any;
-      const skip = (page - 1) * limit;
+      const { page = '1', limit = '10' } = req.query as any;
+      const pageNum = parseInt(page, 10);
+      const limitNum = parseInt(limit, 10);
+      const skip = (pageNum - 1) * limitNum;
 
       const [transactions, total] = await Promise.all([
         prisma.creditTransaction.findMany({
           where: { userId },
           orderBy: { createdAt: 'desc' },
           skip,
-          take: limit
+          take: limitNum
         }),
         prisma.creditTransaction.count({
           where: { userId }
         })
       ]);
 
-      const pagination = createPagination(page, limit, total);
+      const pagination = createPagination(pageNum, limitNum, total);
 
       ResponseHelper.success(res, transactions, 'Transactions retrieved successfully', 200, pagination);
     } catch (error) {

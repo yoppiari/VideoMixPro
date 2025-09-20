@@ -1,5 +1,4 @@
-import { PrismaClient as PrismaClientProd } from '@prisma/client';
-import { PrismaClient as PrismaClientDev } from '../../node_modules/.prisma/client-dev';
+import { PrismaClient } from '../../node_modules/.prisma/client-dev';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -11,7 +10,7 @@ const envFile = process.env.NODE_ENV === 'development'
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 // Type definitions for unified Prisma client
-type AnyPrismaClient = PrismaClientProd | PrismaClientDev;
+type AnyPrismaClient = PrismaClient;
 
 class DatabaseAdapter {
   private client: AnyPrismaClient | null = null;
@@ -31,10 +30,10 @@ class DatabaseAdapter {
         console.log('🔧 Connecting to SQLite database (Development)...');
 
         // Use SQLite for development
-        this.client = new PrismaClientDev({
+        this.client = new PrismaClient({
           datasources: {
             db: {
-              url: process.env.DATABASE_URL_DEV || 'file:./dev.db'
+              url: process.env.DATABASE_URL_DEV || 'file:./prisma/dev.db'
             }
           },
           log: ['error', 'warn']
@@ -43,7 +42,7 @@ class DatabaseAdapter {
         console.log('🚀 Connecting to PostgreSQL database (Production)...');
 
         // Use PostgreSQL for production
-        this.client = new PrismaClientProd({
+        this.client = new PrismaClient({
           datasources: {
             db: {
               url: process.env.DATABASE_URL
@@ -57,7 +56,7 @@ class DatabaseAdapter {
       await (this.client as any).$connect();
       console.log('✅ Database connected successfully');
 
-      return this.client;
+      return this.client as AnyPrismaClient;
     } catch (error) {
       console.error('❌ Database connection failed:', error);
       throw error;
@@ -116,7 +115,7 @@ export const prisma = new Proxy({} as any, {
 });
 
 // Export types for use in application
-export type { User, Project, VideoFile, ProcessingJob } from '@prisma/client';
+export type { User, Project, VideoFile, ProcessingJob } from '../../node_modules/.prisma/client-dev';
 
 // Export enums as objects for SQLite compatibility
 export const LicenseType = {

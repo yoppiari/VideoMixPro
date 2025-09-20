@@ -36,8 +36,8 @@ export const ProjectCreateSchema = z.object({
 export const ProjectUpdateSchema = ProjectCreateSchema.partial();
 
 export const VideoUploadSchema = z.object({
-  projectId: z.string().uuid('Invalid project ID'),
-  groupId: z.string().uuid('Invalid group ID').optional()
+  projectId: z.string().min(1, 'Project ID is required'),
+  groupId: z.string().min(1).optional()
 });
 
 export const CreditPurchaseSchema = z.object({
@@ -64,7 +64,10 @@ export const validateFileType = (mimetype: string): boolean => {
     'video/mp4',
     'video/quicktime',
     'video/x-msvideo',
-    'video/x-matroska'
+    'video/x-matroska',
+    'video/avi',
+    'video/webm',
+    'application/octet-stream' // Allow generic binary for video files
   ];
   return allowedTypes.includes(mimetype);
 };

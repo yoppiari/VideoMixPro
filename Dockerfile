@@ -48,8 +48,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy Prisma schema for migrations
 COPY prisma ./prisma
 
-# Create directories
-RUN mkdir -p uploads outputs logs
+# Create directories for production
+RUN mkdir -p uploads outputs logs temp receipts invoices backups
 RUN chown -R nodejs:nodejs /app
 
 # Switch to non-root user

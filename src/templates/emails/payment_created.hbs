@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Created - VideoMixPro</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .payment-details {
+            background-color: #f8fafc;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #2563eb;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .detail-value {
+            color: #1f2937;
+            font-weight: 500;
+        }
+        .amount {
+            font-size: 24px;
+            color: #059669;
+            font-weight: bold;
+        }
+        .status {
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .instructions {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .detail-row { flex-direction: column; }
+            .detail-label { margin-bottom: 2px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎬 VideoMixPro</div>
+            <div class="title">Payment Created</div>
+        </div>
+
+        <p>Hello <strong>{{user.firstName}} {{user.lastName}}</strong>,</p>
+
+        <p>Your payment has been created successfully. Please complete the payment to activate your credits.</p>
+
+        <div class="payment-details">
+            <div class="detail-row">
+                <span class="detail-label">Invoice Number:</span>
+                <span class="detail-value">{{payment.receiptNumber}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Amount:</span>
+                <span class="detail-value amount">{{formatCurrency payment.amount}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Credits:</span>
+                <span class="detail-value">{{payment.credits}} credits</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">{{payment.paymentMethod}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value"><span class="status">{{payment.status}}</span></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Created:</span>
+                <span class="detail-value">{{formatDate payment.createdAt}}</span>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3 style="margin-top: 0; color: #1e40af;">Payment Instructions:</h3>
+            <ol>
+                <li>Please transfer the exact amount to our payment account</li>
+                <li>Use the invoice number <strong>{{payment.receiptNumber}}</strong> as payment reference</li>
+                <li>Upload your payment proof through our platform</li>
+                <li>Your credits will be added automatically after verification</li>
+            </ol>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{{frontendUrl}}/payments/{{payment.id}}" class="button">
+                View Payment Details
+            </a>
+        </div>
+
+        <p>If you have any questions, please don't hesitate to contact our support team.</p>
+
+        <div class="footer">
+            <p>VideoMixPro - Professional Video Mixing Platform</p>
+            <p>This email was sent to {{user.email}}</p>
+            <p>© 2024 VideoMixPro. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Confirmed - VideoMixPro</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .success-icon {
+            font-size: 48px;
+            color: #059669;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .payment-details {
+            background-color: #f0fdf4;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #059669;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .detail-value {
+            color: #1f2937;
+            font-weight: 500;
+        }
+        .amount {
+            font-size: 24px;
+            color: #059669;
+            font-weight: bold;
+        }
+        .status {
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .credits-highlight {
+            background-color: #eff6ff;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .credits-number {
+            font-size: 36px;
+            color: #2563eb;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #059669;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .next-steps {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .detail-row { flex-direction: column; }
+            .detail-label { margin-bottom: 2px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎬 VideoMixPro</div>
+            <div class="success-icon">✅</div>
+            <div class="title">Payment Confirmed!</div>
+        </div>
+
+        <p>Hello <strong>{{user.firstName}} {{user.lastName}}</strong>,</p>
+
+        <p>Great news! Your payment has been confirmed and your credits have been added to your account.</p>
+
+        <div class="credits-highlight">
+            <div class="credits-number">+{{payment.credits}}</div>
+            <div style="color: #4b5563; font-weight: 600;">Credits Added to Your Account</div>
+        </div>
+
+        <div class="payment-details">
+            <div class="detail-row">
+                <span class="detail-label">Invoice Number:</span>
+                <span class="detail-value">{{payment.receiptNumber}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Amount Paid:</span>
+                <span class="detail-value amount">{{formatCurrency payment.amount}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Credits Added:</span>
+                <span class="detail-value">{{payment.credits}} credits</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">{{payment.paymentMethod}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value"><span class="status">{{payment.status}}</span></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Confirmed:</span>
+                <span class="detail-value">{{formatDate payment.updatedAt}}</span>
+            </div>
+        </div>
+
+        <div class="next-steps">
+            <h3 style="margin-top: 0; color: #1e40af;">What's Next?</h3>
+            <ul style="margin-bottom: 0;">
+                <li>Your {{payment.credits}} credits are now available in your account</li>
+                <li>You can start creating and processing video projects</li>
+                <li>Each video processing job will consume credits based on complexity</li>
+                <li>You can view your credit balance anytime in your dashboard</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{{frontendUrl}}/dashboard" class="button">
+                Go to Dashboard
+            </a>
+        </div>
+
+        <p>Thank you for choosing VideoMixPro! If you need any assistance with your video projects, our support team is here to help.</p>
+
+        <div class="footer">
+            <p>VideoMixPro - Professional Video Mixing Platform</p>
+            <p>This email was sent to {{user.email}}</p>
+            <p>© 2024 VideoMixPro. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

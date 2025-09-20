@@ -14,5 +14,7 @@ router.post('/upload', uploadMiddleware.array('videos', 50), validateRequest(Vid
 router.get('/project/:projectId', videoController.getProjectVideos);
 router.delete('/:id', videoController.deleteVideo);
 router.get('/:id/metadata', videoController.getVideoMetadata);
+router.patch('/:videoId/group', videoController.assignVideoToGroup);
+router.patch('/bulk-assign-group', videoController.bulkAssignVideosToGroup);
 
 export default router;

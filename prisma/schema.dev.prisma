@@ -16,14 +16,20 @@ model User {
   firstName     String        @map("first_name")
   lastName      String        @map("last_name")
   isActive      Boolean       @default(true) @map("is_active")
+  role          String        @default("USER") // USER, ADMIN, SUPER_ADMIN
   credits       Int           @default(0)
   licenseType   String        @default("FREE") @map("license_type")
   licenseExpiry DateTime?     @map("license_expiry")
+  lastLoginAt   DateTime?     @map("last_login_at")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
   projects          Project[]
   creditTransactions CreditTransaction[]
+  payments          Payment[]
+  emailLogs         EmailLog[]
+  adminLogs         AdminLog[]
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -87,6 +93,9 @@ model ProcessingJob {
   startedAt    DateTime? @map("started_at")
   completedAt  DateTime? @map("completed_at")
   errorMessage String?   @map("error_message")
+  creditsUsed  Int       @default(0) @map("credits_used")   // Credits used for this job
+  outputCount  Int       @default(1) @map("output_count")   // Number of outputs to generate
+  refundedAt   DateTime? @map("refunded_at")               // Timestamp if credits were refunded
   createdAt    DateTime  @default(now()) @map("created_at")
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -117,9 +126,87 @@ model CreditTransaction {
   amount      Int
   type        String          // TransactionType as string
   description String
+  paymentId   String?         @map("payment_id") // Link to payment if from purchase
   createdAt   DateTime        @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@map("credit_transactions")
+}
+
+model Payment {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  receiptNumber    String   @unique @map("receipt_number") // Format: INV-YYYY-MM-XXXXXX
+  amount           Float    // Payment amount in currency
+  currency         String   @default("IDR")
+  creditsAmount    Int      @map("credits_amount") // Credits to be added
+  status           String   @default("PENDING") // PENDING, PAID, FAILED, CANCELLED
+  paymentMethod    String?  @map("payment_method") // Manual entry by admin
+  notes            String?  // Admin notes
+  paidAt           DateTime? @map("paid_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditTransactions  CreditTransaction[]
+  emailLogs          EmailLog[]
+
+  @@map("payments")
+}
+
+model EmailLog {
+  id          String   @id @default(cuid())
+  userId      String?  @map("user_id")
+  paymentId   String?  @map("payment_id")
+  emailType   String   @map("email_type") // PAYMENT_CREATED, PAYMENT_CONFIRMED, CREDIT_ADDED, etc.
+  recipient   String
+  subject     String
+  template    String
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  sentAt      DateTime? @map("sent_at")
+  errorMessage String? @map("error_message")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@map("email_logs")
+}
+
+model AdminLog {
+  id          String   @id @default(cuid())
+  adminId     String   @map("admin_id")
+  action      String   // USER_UPDATED, PAYMENT_APPROVED, CREDITS_ADDED, etc.
+  targetType  String   @map("target_type") // USER, PAYMENT, SYSTEM, etc.
+  targetId    String?  @map("target_id")
+  description String
+  metadata    String?  // JSON data for additional context
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  admin User @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   // PAYMENT_CREATED, PAYMENT_CONFIRMED, CREDITS_LOW, etc.
+  title     String
+  message   String
+  data      String?  // JSON stored as string in SQLite
+  isRead    Boolean  @default(false) @map("is_read")
+  priority  String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  category  String   // PAYMENT, PROJECT, SYSTEM, MARKETING, SECURITY
+  expiresAt DateTime? @map("expires_at")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("credit_transactions")
+  @@map("notifications")
 }

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to VideoMixPro</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #1f2937;
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .welcome-icon {
+            font-size: 64px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .user-info {
+            background-color: #eff6ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #2563eb;
+        }
+        .feature-list {
+            background-color: #f8fafc;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+        .feature-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 40px;
+            text-align: center;
+        }
+        .feature-text h4 {
+            margin: 0 0 5px 0;
+            color: #1f2937;
+            font-size: 16px;
+        }
+        .feature-text p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+        .button.secondary {
+            background-color: #059669;
+        }
+        .getting-started {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .step-number {
+            background-color: #2563eb;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .feature-item { flex-direction: column; text-align: center; }
+            .feature-icon { margin-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎬 VideoMixPro</div>
+            <div class="welcome-icon">🎉</div>
+            <div class="title">Welcome Aboard!</div>
+        </div>
+
+        <p>Hello <strong>{{user.firstName}} {{user.lastName}}</strong>,</p>
+
+        <p>Welcome to VideoMixPro! We're thrilled to have you join our community of content creators and video professionals.</p>
+
+        <div class="user-info">
+            <h3 style="margin-top: 0; color: #1e40af;">Your Account Details</h3>
+            <p><strong>Email:</strong> {{user.email}}</p>
+            <p><strong>License:</strong> {{user.licenseType}}</p>
+            <p><strong>Starting Credits:</strong> {{user.credits}} credits</p>
+            <p><strong>Account Created:</strong> {{formatDate user.createdAt}}</p>
+        </div>
+
+        <div class="feature-list">
+            <h3 style="margin-top: 0; color: #1f2937;">🚀 What You Can Do With VideoMixPro</h3>
+
+            <div class="feature-item">
+                <div class="feature-icon">🎥</div>
+                <div class="feature-text">
+                    <h4>Smart Video Mixing</h4>
+                    <p>Create professional video compositions with our AI-powered mixing algorithms</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-text">
+                    <h4>Fast Processing</h4>
+                    <p>High-speed video processing with cloud-based infrastructure</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">🎨</div>
+                <div class="feature-text">
+                    <h4>Custom Templates</h4>
+                    <p>Choose from corporate, social media, educational, and promotional templates</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">📊</div>
+                <div class="feature-text">
+                    <h4>A/B Testing</h4>
+                    <p>Create multiple variations for effective content testing</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">💾</div>
+                <div class="feature-text">
+                    <h4>High-Quality Exports</h4>
+                    <p>Export in multiple formats and resolutions for any platform</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="getting-started">
+            <h3 style="margin-top: 0; color: #065f46;">🎯 Getting Started in 3 Easy Steps</h3>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div>
+                    <strong>Create Your First Project</strong><br>
+                    Upload your video files and choose a mixing template
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div>
+                    <strong>Customize Settings</strong><br>
+                    Adjust transitions, timing, and effects to match your vision
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div>
+                    <strong>Process & Download</strong><br>
+                    Let our AI create your video mix and download the results
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{{frontendUrl}}/dashboard" class="button">
+                Go to Dashboard
+            </a>
+            <br>
+            <a href="{{frontendUrl}}/projects/new" class="button secondary">
+                Create First Project
+            </a>
+        </div>
+
+        <p><strong>Need Help?</strong> Our documentation and support team are here to help you get the most out of VideoMixPro:</p>
+
+        <ul>
+            <li>📚 <a href="{{frontendUrl}}/docs">Documentation & Tutorials</a></li>
+            <li>💬 <a href="{{frontendUrl}}/support">24/7 Support Center</a></li>
+            <li>🎬 <a href="{{frontendUrl}}/examples">Example Projects</a></li>
+            <li>💡 <a href="{{frontendUrl}}/tips">Video Mixing Tips</a></li>
+        </ul>
+
+        <p>We're excited to see what amazing video content you'll create with VideoMixPro!</p>
+
+        <div class="footer">
+            <p>VideoMixPro - Professional Video Mixing Platform</p>
+            <p>This email was sent to {{user.email}}</p>
+            <p>© 2024 VideoMixPro. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

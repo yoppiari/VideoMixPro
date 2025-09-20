@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/utils/database';
 import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper, createPagination } from '@/utils/response';
 import { VideoProcessingService } from '@/services/video-processing.service';
@@ -7,8 +7,6 @@ import { JobStatus, ProjectStatus, TransactionType } from '@/types';
 import logger from '@/utils/logger';
 import path from 'path';
 import fs from 'fs';
-
-const prisma = new PrismaClient();
 const videoProcessingService = new VideoProcessingService();
 
 export class ProcessingController {
@@ -16,6 +14,7 @@ export class ProcessingController {
     try {
       const userId = req.user?.userId;
       const { projectId } = req.params;
+      const { settings: mixingSettings } = req.body;
 
       if (!userId) {
         ResponseHelper.unauthorized(res, 'User not authenticated');
@@ -47,10 +46,18 @@ export class ProcessingController {
         return;
       }
 
-      // Calculate credit cost
-      const settings = project.settings as any;
-      const outputCount = settings.outputCount || 1;
-      const creditsRequired = this.calculateCreditsRequired(outputCount, settings);
+      // Minimum 2 videos required for mixing
+      if (project.videoFiles.length < 2) {
+        ResponseHelper.error(res, 'Minimum 2 videos required for mixing. Please upload more videos.', 400);
+        return;
+      }
+
+      // Use mixing settings from request if provided, otherwise use project settings
+      const processingSettings = mixingSettings || (project.settings as any);
+      const outputCount = processingSettings.outputCount || 1;
+
+      // Calculate credit cost using the actual settings that will be used for processing
+      const creditsRequired = this.calculateCreditsRequired(outputCount, processingSettings);
 
       // Check user credits
       const user = await prisma.user.findUnique({
@@ -65,19 +72,19 @@ export class ProcessingController {
 
       // Create processing job
       const job = await prisma.$transaction(async (tx) => {
-        // Deduct credits
+        // Deduct credits - FIX: Use actual creditsRequired amount
         await tx.user.update({
           where: { id: userId },
           data: { credits: { decrement: creditsRequired } }
         });
 
-        // Record transaction
+        // Record transaction with correct amount
         await tx.creditTransaction.create({
           data: {
             userId,
             amount: -creditsRequired,
             type: TransactionType.USAGE,
-            description: `Video processing for project: ${project.name}`
+            description: `Video processing for project: ${project.name} (${outputCount} videos)`
           }
         });
 
@@ -87,20 +94,22 @@ export class ProcessingController {
           data: { status: ProjectStatus.PROCESSING }
         });
 
-        // Create job
+        // Create job with credits tracking
         return tx.processingJob.create({
           data: {
             projectId,
-            status: JobStatus.PENDING
+            status: JobStatus.PENDING,
+            creditsUsed: creditsRequired, // Track credits used for potential refund
+            outputCount: outputCount
           }
         });
       });
 
-      // Queue the processing job
+      // Queue the processing job with the same settings used for credit calculation
       await videoProcessingService.queueProcessingJob(job.id, {
         projectId,
-        outputCount,
-        settings
+        outputCount: outputCount,
+        settings: processingSettings
       });
 
       ResponseHelper.success(res, {
@@ -200,6 +209,46 @@ export class ProcessingController {
     }
   }
 
+  async getProjectJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { projectId } = req.params;
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Verify user owns the project
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId }
+      });
+
+      if (!project) {
+        ResponseHelper.notFound(res, 'Project not found');
+        return;
+      }
+
+      const jobs = await prisma.processingJob.findMany({
+        where: { projectId },
+        include: {
+          project: {
+            select: { id: true, name: true }
+          },
+          outputFiles: {
+            select: { id: true, filename: true, size: true, createdAt: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      ResponseHelper.success(res, jobs);
+    } catch (error) {
+      logger.error('Get project jobs error:', error);
+      ResponseHelper.serverError(res, 'Failed to get project jobs');
+    }
+  }
+
   async getUserJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
@@ -208,8 +257,10 @@ export class ProcessingController {
         return;
       }
 
-      const { page = 1, limit = 10 } = req.query as any;
-      const skip = (page - 1) * limit;
+      const { page = '1', limit = '10' } = req.query as any;
+      const pageNum = parseInt(page, 10);
+      const limitNum = parseInt(limit, 10);
+      const skip = (pageNum - 1) * limitNum;
 
       const [jobs, total] = await Promise.all([
         prisma.processingJob.findMany({
@@ -226,7 +277,7 @@ export class ProcessingController {
           },
           orderBy: { createdAt: 'desc' },
           skip,
-          take: limit
+          take: limitNum
         }),
         prisma.processingJob.count({
           where: {
@@ -235,12 +286,113 @@ export class ProcessingController {
         })
       ]);
 
-      const pagination = createPagination(page, limit, total);
+      const pagination = createPagination(pageNum, limitNum, total);
 
       ResponseHelper.success(res, jobs, 'Jobs retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get user jobs error:', error);
       ResponseHelper.serverError(res, 'Failed to get jobs');
+    }
+  }
+
+  async getCreditsEstimate(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      const { outputCount, settings } = req.body;
+
+      if (!outputCount || outputCount < 1) {
+        ResponseHelper.error(res, 'Invalid output count', 400);
+        return;
+      }
+
+      const creditsRequired = this.calculateCreditsRequired(outputCount, settings || {});
+
+      // Get user's current credits
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { credits: true }
+      });
+
+      const hasEnoughCredits = user ? user.credits >= creditsRequired : false;
+
+      ResponseHelper.success(res, {
+        creditsRequired,
+        userCredits: user?.credits || 0,
+        hasEnoughCredits,
+        breakdown: this.getCreditBreakdown(outputCount, settings || {})
+      });
+    } catch (error) {
+      logger.error('Get credits estimate error:', error);
+      ResponseHelper.serverError(res, 'Failed to calculate credits estimate');
+    }
+  }
+
+  async getJobDetails(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { jobId } = req.params;
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Get job with full details including error information
+      const job = await prisma.processingJob.findFirst({
+        where: {
+          id: jobId,
+          project: { userId }
+        },
+        include: {
+          project: {
+            select: { id: true, name: true }
+          },
+          outputFiles: true
+        }
+      });
+
+      if (!job) {
+        ResponseHelper.error(res, 'Job not found', 404);
+        return;
+      }
+
+      // Parse error details if available
+      let errorDetails = null;
+      if (job.errorMessage) {
+        try {
+          // Try to parse if it's JSON
+          errorDetails = JSON.parse(job.errorMessage);
+        } catch {
+          // Otherwise use as plain text
+          errorDetails = {
+            message: job.errorMessage,
+            type: 'processing_error'
+          };
+        }
+      }
+
+      ResponseHelper.success(res, {
+        id: job.id,
+        projectId: job.projectId,
+        projectName: job.project.name,
+        status: job.status,
+        outputCount: job.outputCount,
+        creditsUsed: job.creditsUsed,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+        errorDetails,
+        outputFiles: job.outputFiles,
+        duration: job.completedAt ?
+          Math.floor((job.completedAt.getTime() - job.createdAt.getTime()) / 1000) : null
+      });
+    } catch (error) {
+      logger.error('Get job details error:', error);
+      ResponseHelper.serverError(res, 'Failed to get job details');
     }
   }
 
@@ -319,30 +471,170 @@ export class ProcessingController {
   }
 
   private calculateCreditsRequired(outputCount: number, settings: any): number {
-    const baseCreditsPerVideo = 2;
-    const qualityMultiplier = this.getQualityMultiplier(settings.quality);
-    const formatMultiplier = this.getFormatMultiplier(settings.outputFormat);
+    // Base cost: 1 credit per output video
+    let baseCredits = outputCount;
 
-    return Math.ceil(outputCount * baseCreditsPerVideo * qualityMultiplier * formatMultiplier);
+    // Output count multipliers (volume pricing)
+    const volumeMultiplier = this.getVolumeMultiplier(outputCount);
+
+    // Quality multipliers (resolution + bitrate + framerate)
+    const qualityMultiplier = this.getQualityMultiplier(settings);
+
+    // Mixing complexity multipliers
+    const mixingMultiplier = this.getMixingComplexityMultiplier(settings);
+
+    // Apply all multipliers
+    const totalCredits = baseCredits * volumeMultiplier * qualityMultiplier * mixingMultiplier;
+
+    return Math.ceil(totalCredits);
   }
 
-  private getQualityMultiplier(quality: string): number {
-    switch (quality) {
-      case 'LOW': return 0.5;
-      case 'MEDIUM': return 1.0;
-      case 'HIGH': return 1.5;
-      case 'ULTRA': return 2.0;
+  private getVolumeMultiplier(outputCount: number): number {
+    if (outputCount <= 5) return 1.0;        // 1-5 videos: no penalty
+    if (outputCount <= 10) return 1.5;       // 6-10 videos: 1.5x cost
+    if (outputCount <= 20) return 2.0;       // 11-20 videos: 2x cost
+    return 3.0;                              // 21+ videos: 3x cost
+  }
+
+  private getQualityMultiplier(settings: any): number {
+    let multiplier = 1.0;
+
+    // Resolution multiplier
+    const resolution = settings.resolution || 'HD';
+    switch (resolution) {
+      case 'SD': multiplier *= 0.8; break;     // 480p: 0.8x
+      case 'HD': multiplier *= 1.0; break;     // 720p: 1.0x
+      case 'FULL_HD': multiplier *= 1.5; break; // 1080p: 1.5x
+      default: multiplier *= 1.0; break;
+    }
+
+    // Bitrate multiplier
+    const bitrate = settings.bitrate || 'MEDIUM';
+    switch (bitrate) {
+      case 'LOW': multiplier *= 0.7; break;    // 1 Mbps: 0.7x
+      case 'MEDIUM': multiplier *= 1.0; break; // 4 Mbps: 1.0x
+      case 'HIGH': multiplier *= 1.3; break;   // 8 Mbps: 1.3x
+      default: multiplier *= 1.0; break;
+    }
+
+    // Frame rate multiplier
+    const frameRate = settings.frameRate || 30;
+    if (frameRate >= 60) {
+      multiplier *= 1.2; // 60 FPS: 1.2x cost
+    }
+
+    return multiplier;
+  }
+
+  private getMixingComplexityMultiplier(settings: any): number {
+    let complexityScore = 0;
+
+    // Count enabled mixing options (anti-fingerprinting features)
+    if (settings.orderMixing !== false) complexityScore += 1;           // Order mixing
+    if (settings.speedVariations) complexityScore += 1;                 // Speed variations
+    if (settings.differentStartingVideo) complexityScore += 1;          // Different starting video
+    if (settings.groupMixing) complexityScore += 1;                     // Group-based mixing
+    if (settings.transitionVariations) complexityScore += 1;            // Transition variations
+    if (settings.colorVariations) complexityScore += 1;                 // Color variations
+
+    // Complexity multipliers based on anti-fingerprinting strength
+    switch (complexityScore) {
+      case 0: return 0.5;  // No variations: 0.5x (basic processing)
+      case 1: return 0.8;  // Weak: 0.8x
+      case 2: return 1.0;  // Fair: 1.0x (base cost)
+      case 3: return 1.2;  // Good: 1.2x
+      case 4: return 1.5;  // Strong: 1.5x
+      case 5: return 1.8;  // Very Strong: 1.8x
+      case 6: return 2.2;  // Maximum: 2.2x (all features enabled)
       default: return 1.0;
     }
   }
 
-  private getFormatMultiplier(format: string): number {
-    switch (format) {
-      case 'MP4': return 1.0;
-      case 'MOV': return 1.2;
-      case 'AVI': return 1.5;
-      default: return 1.0;
+  private getCreditBreakdown(outputCount: number, settings: any): any {
+    const baseCredits = outputCount;
+    const volumeMultiplier = this.getVolumeMultiplier(outputCount);
+    const qualityMultiplier = this.getQualityMultiplier(settings);
+    const mixingMultiplier = this.getMixingComplexityMultiplier(settings);
+
+    // Calculate step-by-step costs
+    const afterVolume = baseCredits * volumeMultiplier;
+    const afterQuality = afterVolume * qualityMultiplier;
+    const totalCredits = afterQuality * mixingMultiplier;
+
+    // Get anti-fingerprinting strength
+    let complexityScore = 0;
+    const enabledFeatures = [];
+
+    if (settings.orderMixing !== false) { complexityScore += 1; enabledFeatures.push('Order Mixing'); }
+    if (settings.speedVariations) { complexityScore += 1; enabledFeatures.push('Speed Variations'); }
+    if (settings.differentStartingVideo) { complexityScore += 1; enabledFeatures.push('Different Starting Video'); }
+    if (settings.groupMixing) { complexityScore += 1; enabledFeatures.push('Group-Based Mixing'); }
+    if (settings.transitionVariations) { complexityScore += 1; enabledFeatures.push('Transition Variations'); }
+    if (settings.colorVariations) { complexityScore += 1; enabledFeatures.push('Color Variations'); }
+
+    const strengthLevels = ['None', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong', 'Maximum'];
+    const strengthLevel = strengthLevels[complexityScore] || 'Fair';
+
+    return {
+      baseCredits,
+      outputCount,
+      multipliers: {
+        volume: {
+          value: volumeMultiplier,
+          reason: this.getVolumeReason(outputCount)
+        },
+        quality: {
+          value: qualityMultiplier,
+          reason: this.getQualityReason(settings)
+        },
+        mixing: {
+          value: mixingMultiplier,
+          reason: `${strengthLevel} anti-fingerprinting (${complexityScore}/6 features)`
+        }
+      },
+      steps: {
+        base: baseCredits,
+        afterVolume: Math.ceil(afterVolume),
+        afterQuality: Math.ceil(afterQuality),
+        final: Math.ceil(totalCredits)
+      },
+      enabledFeatures,
+      antiFingerprintingStrength: strengthLevel
+    };
+  }
+
+  private getVolumeReason(outputCount: number): string {
+    if (outputCount <= 5) return '1-5 videos: No volume penalty';
+    if (outputCount <= 10) return '6-10 videos: 1.5x volume penalty';
+    if (outputCount <= 20) return '11-20 videos: 2x volume penalty';
+    return '21+ videos: 3x volume penalty';
+  }
+
+  private getQualityReason(settings: any): string {
+    const factors = [];
+
+    const resolution = settings.resolution || 'HD';
+    switch (resolution) {
+      case 'SD': factors.push('480p (-20%)'); break;
+      case 'HD': factors.push('720p (base)'); break;
+      case 'FULL_HD': factors.push('1080p (+50%)'); break;
+      default: factors.push('720p (base)'); break;
     }
+
+    const bitrate = settings.bitrate || 'MEDIUM';
+    switch (bitrate) {
+      case 'LOW': factors.push('1 Mbps (-30%)'); break;
+      case 'MEDIUM': factors.push('4 Mbps (base)'); break;
+      case 'HIGH': factors.push('8 Mbps (+30%)'); break;
+      default: factors.push('4 Mbps (base)'); break;
+    }
+
+    const frameRate = settings.frameRate || 30;
+    if (frameRate >= 60) {
+      factors.push('60 FPS (+20%)');
+    }
+
+    return factors.join(', ');
   }
 
   private estimateProcessingTime(videoFiles: any[], outputCount: number): string {
