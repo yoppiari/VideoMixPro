@@ -12,6 +12,7 @@ interface Job {
   creditsUsed?: number;
   outputCount?: number;
   refundedAt?: string;
+  settings?: any; // Processing settings used for this job
   project: {
     id: string;
     name: string;
@@ -42,6 +43,11 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [downloadInfo, setDownloadInfo] = useState<any>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [downloadMode, setDownloadMode] = useState<'single' | 'batch' | 'chunk'>('single');
+  const filesPerPage = 20;
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -100,6 +106,121 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
     } catch (error) {
       console.error('Error cancelling job:', error);
       setError('Failed to cancel job');
+    }
+  };
+
+  const handleShowJobDetails = async (job: Job) => {
+    try {
+      // Fetch detailed job info including settings
+      const response = await fetch(`/api/v1/processing/job/${job.id}/details`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          // Update the job with full details including settings
+          setSelectedJob({ ...job, settings: data.data.settings });
+        } else {
+          setSelectedJob(job);
+        }
+      } else {
+        setSelectedJob(job);
+      }
+
+      // Fetch download info for batch options
+      if (job.status === 'COMPLETED' && job.outputFiles.length > 0) {
+        const infoResponse = await fetch(`/api/v1/processing/job/${job.id}/download-info`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        });
+
+        if (infoResponse.ok) {
+          const infoData = await infoResponse.json();
+          if (infoData.success && infoData.data) {
+            setDownloadInfo(infoData.data);
+            // Set default download mode based on file count
+            if (infoData.data.totalFiles > 100) {
+              setDownloadMode('chunk');
+            } else if (infoData.data.totalFiles > 20) {
+              setDownloadMode('batch');
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching job details:', error);
+      setSelectedJob(job);
+    }
+    setShowDetails(true);
+    setCurrentPage(1);
+    setSelectedFiles(new Set());
+  };
+
+  const handleBatchDownload = async (mode: 'all' | 'selected' = 'all') => {
+    if (!selectedJob) return;
+
+    try {
+      const response = await fetch(`/api/v1/processing/job/${selectedJob.id}/download-batch`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mode,
+          outputIds: mode === 'selected' ? Array.from(selectedFiles) : undefined
+        })
+      });
+
+      if (response.ok) {
+        // Convert response to blob and download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${selectedJob.project.name}_batch.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Error downloading batch:', error);
+      alert('Failed to download batch');
+    }
+  };
+
+  const handleChunkDownload = async (chunkIndex: number) => {
+    if (!selectedJob || !downloadInfo) return;
+
+    try {
+      const response = await fetch(
+        `/api/v1/processing/job/${selectedJob.id}/download-chunk?chunkIndex=${chunkIndex}&chunkSize=${downloadInfo.recommendedChunkSize}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${selectedJob.project.name}_chunk${chunkIndex + 1}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Error downloading chunk:', error);
+      alert('Failed to download chunk');
     }
   };
 
@@ -296,10 +417,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                     )}
 
                     <button
-                      onClick={() => {
-                        setSelectedJob(job);
-                        setShowDetails(true);
-                      }}
+                      onClick={() => handleShowJobDetails(job)}
                       className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                     >
                       Details
@@ -321,7 +439,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
       {/* Job Details Modal */}
       {showDetails && selectedJob && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 max-w-4xl shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
             <div className="mt-3">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-medium text-gray-900">
@@ -408,16 +526,256 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                   </div>
                 )}
 
+                {/* Processing Settings Section */}
+                {selectedJob.settings && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Processing Settings</label>
+                    <div className="p-3 bg-gray-50 rounded space-y-3">
+                      {/* Mixing Options */}
+                      <div className="border-b border-gray-200 pb-2">
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Mixing Options</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-500">Order Mixing:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.orderMixing ? '✓ Enabled' : '✗ Disabled'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Speed Variations:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.speedMixing ? '✓ Enabled' : '✗ Disabled'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Group-Based:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.groupMixing ? '✓ Enabled' : '✗ Disabled'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Different Starting:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.differentStartingVideo ? '✓ Enabled' : '✗ Disabled'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quality Settings */}
+                      <div className="border-b border-gray-200 pb-2">
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Quality Settings</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-500">Resolution:</span>
+                            <span className="ml-1 font-medium uppercase">{selectedJob.settings.resolution}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Bitrate:</span>
+                            <span className="ml-1 font-medium capitalize">{selectedJob.settings.bitrate}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Frame Rate:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.frameRate} fps</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Aspect Ratio:</span>
+                            <span className="ml-1 font-medium capitalize">{selectedJob.settings.aspectRatio?.replace('_', ' ')}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Duration Settings */}
+                      <div className="border-b border-gray-200 pb-2">
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Duration Settings</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-500">Type:</span>
+                            <span className="ml-1 font-medium capitalize">{selectedJob.settings.durationType}</span>
+                          </div>
+                          {selectedJob.settings.durationType === 'fixed' && (
+                            <>
+                              <div>
+                                <span className="text-gray-500">Duration:</span>
+                                <span className="ml-1 font-medium">{selectedJob.settings.fixedDuration}s</span>
+                              </div>
+                              {selectedJob.settings.smartTrimming && (
+                                <>
+                                  <div>
+                                    <span className="text-gray-500">Smart Trimming:</span>
+                                    <span className="ml-1 font-medium">✓ Enabled</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Distribution:</span>
+                                    <span className="ml-1 font-medium capitalize">{selectedJob.settings.durationDistributionMode}</span>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Other Settings */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Other Settings</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-500">Audio:</span>
+                            <span className="ml-1 font-medium capitalize">{selectedJob.settings.audioMode}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Output Count:</span>
+                            <span className="ml-1 font-medium">{selectedJob.settings.outputCount} videos</span>
+                          </div>
+                          {selectedJob.settings.colorVariations && (
+                            <div>
+                              <span className="text-gray-500">Color Variations:</span>
+                              <span className="ml-1 font-medium">✓ Enabled ({selectedJob.settings.colorIntensity})</span>
+                            </div>
+                          )}
+                          {selectedJob.settings.transitionEffects && (
+                            <div>
+                              <span className="text-gray-500">Transitions:</span>
+                              <span className="ml-1 font-medium">✓ Enabled</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {selectedJob.outputFiles.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Output Files</label>
-                    <div className="space-y-2">
-                      {selectedJob.outputFiles.map((file) => (
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Output Files ({selectedJob.outputFiles.length} total)
+                      </label>
+
+                      {/* Batch Download Options */}
+                      {selectedJob.outputFiles.length > 1 && (
+                        <div className="flex items-center space-x-2">
+                          {downloadInfo && (
+                            <span className="text-xs text-gray-500">
+                              Total: {downloadInfo.totalSizeFormatted}
+                            </span>
+                          )}
+
+                          {selectedJob.outputFiles.length <= 100 && (
+                            <button
+                              onClick={() => handleBatchDownload('all')}
+                              className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                            >
+                              Download All as ZIP
+                            </button>
+                          )}
+
+                          {selectedFiles.size > 0 && (
+                            <button
+                              onClick={() => handleBatchDownload('selected')}
+                              className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                            >
+                              Download Selected ({selectedFiles.size})
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Download Mode Selector for Large Sets */}
+                    {downloadInfo && downloadInfo.totalFiles > 100 && (
+                      <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                        <div className="text-sm text-yellow-800 mb-2">
+                          Large output set detected. Choose download method:
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {Array.from({ length: downloadInfo.numberOfChunks }).map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handleChunkDownload(index)}
+                              className="px-3 py-2 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50"
+                            >
+                              Batch {index + 1} ({downloadInfo.recommendedChunkSize} files)
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pagination Controls */}
+                    {selectedJob.outputFiles.length > filesPerPage && (
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm text-gray-600">
+                          Showing {(currentPage - 1) * filesPerPage + 1} to{' '}
+                          {Math.min(currentPage * filesPerPage, selectedJob.outputFiles.length)}
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-2 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                          >
+                            Previous
+                          </button>
+                          <span className="px-2 py-1 text-sm">
+                            Page {currentPage} of {Math.ceil(selectedJob.outputFiles.length / filesPerPage)}
+                          </span>
+                          <button
+                            onClick={() => setCurrentPage(p => Math.min(Math.ceil(selectedJob.outputFiles.length / filesPerPage), p + 1))}
+                            disabled={currentPage >= Math.ceil(selectedJob.outputFiles.length / filesPerPage)}
+                            className="px-2 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Select All for Current Page */}
+                    {selectedJob.outputFiles.length > 1 && (
+                      <div className="mb-2">
+                        <label className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            onChange={(e) => {
+                              const pageFiles = selectedJob.outputFiles
+                                .slice((currentPage - 1) * filesPerPage, currentPage * filesPerPage)
+                                .map(f => f.id);
+                              if (e.target.checked) {
+                                setSelectedFiles(new Set([...selectedFiles, ...pageFiles]));
+                              } else {
+                                const newSelected = new Set(selectedFiles);
+                                pageFiles.forEach(id => newSelected.delete(id));
+                                setSelectedFiles(newSelected);
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <span>Select all on this page</span>
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {selectedJob.outputFiles
+                        .slice((currentPage - 1) * filesPerPage, currentPage * filesPerPage)
+                        .map((file) => (
                         <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{file.filename}</div>
-                            <div className="text-xs text-gray-500">
-                              {formatFileSize(file.size)} • Created {new Date(file.createdAt).toLocaleString()}
+                          <div className="flex items-center space-x-3">
+                            {selectedJob.outputFiles.length > 1 && (
+                              <input
+                                type="checkbox"
+                                checked={selectedFiles.has(file.id)}
+                                onChange={(e) => {
+                                  const newSelected = new Set(selectedFiles);
+                                  if (e.target.checked) {
+                                    newSelected.add(file.id);
+                                  } else {
+                                    newSelected.delete(file.id);
+                                  }
+                                  setSelectedFiles(newSelected);
+                                }}
+                                className="rounded"
+                              />
+                            )}
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{file.filename}</div>
+                              <div className="text-xs text-gray-500">
+                                {formatFileSize(file.size)} • Created {new Date(file.createdAt).toLocaleString()}
+                              </div>
                             </div>
                           </div>
                           <button

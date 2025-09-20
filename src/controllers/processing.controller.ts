@@ -7,6 +7,8 @@ import { JobStatus, ProjectStatus, TransactionType } from '@/types';
 import logger from '@/utils/logger';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
+import { pipeline } from 'stream/promises';
 const videoProcessingService = new VideoProcessingService();
 
 export class ProcessingController {
@@ -94,13 +96,14 @@ export class ProcessingController {
           data: { status: ProjectStatus.PROCESSING }
         });
 
-        // Create job with credits tracking
+        // Create job with credits tracking and settings
         return tx.processingJob.create({
           data: {
             projectId,
             status: JobStatus.PENDING,
             creditsUsed: creditsRequired, // Track credits used for potential refund
-            outputCount: outputCount
+            outputCount: outputCount,
+            settings: JSON.stringify(processingSettings) // Store settings for reference
           }
         });
       });
@@ -376,6 +379,17 @@ export class ProcessingController {
         }
       }
 
+      // Parse settings if available
+      let settings = null;
+      if (job.settings) {
+        try {
+          settings = JSON.parse(job.settings);
+        } catch {
+          // If parsing fails, use raw string
+          settings = job.settings;
+        }
+      }
+
       ResponseHelper.success(res, {
         id: job.id,
         projectId: job.projectId,
@@ -387,6 +401,7 @@ export class ProcessingController {
         completedAt: job.completedAt,
         errorDetails,
         outputFiles: job.outputFiles,
+        settings,
         duration: job.completedAt ?
           Math.floor((job.completedAt.getTime() - job.createdAt.getTime()) / 1000) : null
       });
@@ -468,6 +483,208 @@ export class ProcessingController {
       logger.error('Download output error:', error);
       ResponseHelper.serverError(res, 'Failed to download output');
     }
+  }
+
+  async downloadBatch(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { jobId } = req.params;
+      const { outputIds, mode = 'all' } = req.body; // mode: 'all', 'selected', 'batch'
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Get job with outputs
+      const job = await prisma.processingJob.findFirst({
+        where: {
+          id: jobId,
+          project: { userId }
+        },
+        include: {
+          outputFiles: true,
+          project: true
+        }
+      });
+
+      if (!job) {
+        ResponseHelper.error(res, 'Job not found', 404);
+        return;
+      }
+
+      // Determine which files to include
+      let filesToZip = job.outputFiles;
+
+      if (mode === 'selected' && outputIds && outputIds.length > 0) {
+        filesToZip = job.outputFiles.filter(f => outputIds.includes(f.id));
+      }
+
+      if (filesToZip.length === 0) {
+        ResponseHelper.error(res, 'No files to download', 400);
+        return;
+      }
+
+      // Set response headers for ZIP download
+      const zipFilename = `${job.project.name}_${job.id}_batch.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 6 } // Compression level (0-9)
+      });
+
+      // Handle archive errors
+      archive.on('error', (err) => {
+        logger.error('Archive error:', err);
+        throw err;
+      });
+
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Add files to archive
+      for (const file of filesToZip) {
+        if (fs.existsSync(file.path)) {
+          archive.file(file.path, { name: file.filename });
+        }
+      }
+
+      // Finalize the archive
+      await archive.finalize();
+
+    } catch (error) {
+      logger.error('Batch download error:', error);
+      ResponseHelper.serverError(res, 'Failed to create batch download');
+    }
+  }
+
+  async downloadBatchChunked(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { jobId } = req.params;
+      const { chunkSize = 50, chunkIndex = 0 } = req.query;
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Get job with outputs
+      const job = await prisma.processingJob.findFirst({
+        where: {
+          id: jobId,
+          project: { userId }
+        },
+        include: {
+          outputFiles: {
+            skip: Number(chunkIndex) * Number(chunkSize),
+            take: Number(chunkSize)
+          },
+          project: true
+        }
+      });
+
+      if (!job || job.outputFiles.length === 0) {
+        ResponseHelper.error(res, 'No files found for this chunk', 404);
+        return;
+      }
+
+      // Set response headers for ZIP download
+      const zipFilename = `${job.project.name}_${job.id}_chunk${Number(chunkIndex) + 1}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 6 }
+      });
+
+      archive.on('error', (err) => {
+        logger.error('Archive error:', err);
+        throw err;
+      });
+
+      archive.pipe(res);
+
+      // Add files to archive
+      for (const file of job.outputFiles) {
+        if (fs.existsSync(file.path)) {
+          archive.file(file.path, { name: file.filename });
+        }
+      }
+
+      await archive.finalize();
+
+    } catch (error) {
+      logger.error('Chunked batch download error:', error);
+      ResponseHelper.serverError(res, 'Failed to create chunked download');
+    }
+  }
+
+  async getBatchDownloadInfo(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { jobId } = req.params;
+
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Get job with output count and total size
+      const job = await prisma.processingJob.findFirst({
+        where: {
+          id: jobId,
+          project: { userId }
+        },
+        include: {
+          outputFiles: {
+            select: {
+              id: true,
+              size: true
+            }
+          }
+        }
+      });
+
+      if (!job) {
+        ResponseHelper.error(res, 'Job not found', 404);
+        return;
+      }
+
+      // Calculate total size and recommended chunks
+      const totalSize = job.outputFiles.reduce((sum, file) => sum + file.size, 0);
+      const totalFiles = job.outputFiles.length;
+      const recommendedChunkSize = totalFiles > 100 ? 50 : totalFiles > 50 ? 25 : totalFiles;
+      const numberOfChunks = Math.ceil(totalFiles / recommendedChunkSize);
+
+      ResponseHelper.success(res, {
+        totalFiles,
+        totalSize,
+        totalSizeFormatted: this.formatFileSize(totalSize),
+        recommendedChunkSize,
+        numberOfChunks,
+        estimatedZipSize: Math.round(totalSize * 0.9), // ZIP compression estimate
+        downloadOptions: {
+          singleZip: totalFiles <= 100,
+          chunkedZip: totalFiles > 100,
+          cloudUpload: totalFiles > 500
+        }
+      });
+    } catch (error) {
+      logger.error('Get batch download info error:', error);
+      ResponseHelper.serverError(res, 'Failed to get download info');
+    }
+  }
+
+  private formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
   private calculateCreditsRequired(outputCount: number, settings: any): number {

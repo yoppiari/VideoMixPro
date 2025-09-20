@@ -47,6 +47,8 @@ export interface MixingSettings {
   // Duration
   durationType: 'original' | 'fixed';
   fixedDuration: number; // in seconds
+  smartTrimming?: boolean; // Enable intelligent duration distribution
+  durationDistributionMode?: 'proportional' | 'equal' | 'weighted';
 
   // Audio
   audioMode: 'keep' | 'mute';
@@ -94,6 +96,8 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
     aspectRatio: 'original',
     durationType: 'original',
     fixedDuration: 30,
+    smartTrimming: false,
+    durationDistributionMode: 'proportional',
     audioMode: 'keep',
     outputCount: 10
   });
@@ -683,6 +687,44 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                 </div>
               )}
             </div>
+            {settings.durationType === 'fixed' && (
+              <div className="mt-4 space-y-3 p-3 bg-gray-50 rounded-lg">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.smartTrimming || false}
+                    onChange={(e) => handleSettingChange('smartTrimming', e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Smart Duration Distribution
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    (Intelligently distribute duration across clips)
+                  </span>
+                </label>
+
+                {settings.smartTrimming && (
+                  <div className="ml-6 space-y-2">
+                    <label className="block text-xs font-medium text-gray-600">
+                      Distribution Mode:
+                    </label>
+                    <select
+                      value={settings.durationDistributionMode || 'proportional'}
+                      onChange={(e) => handleSettingChange('durationDistributionMode', e.target.value)}
+                      className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="proportional">Proportional - Maintain relative durations</option>
+                      <option value="equal">Equal - Same duration for each clip</option>
+                      <option value="weighted">Weighted - Prioritize first & last clips</option>
+                    </select>
+                    <p className="text-xs text-gray-500">
+                      Each clip will be trimmed to fit the {settings.fixedDuration}s target duration
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

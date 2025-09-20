@@ -57,6 +57,8 @@ export interface MixingSettings {
   // Duration
   durationType?: 'original' | 'fixed';
   fixedDuration?: number; // in seconds
+  durationDistributionMode?: 'proportional' | 'equal' | 'weighted'; // How to distribute duration
+  smartTrimming?: boolean; // Enable intelligent duration distribution
 
   // Audio
   audioMode?: 'keep' | 'mute';
@@ -79,7 +81,152 @@ export interface VideoVariant {
   settings: MixingSettings;
 }
 
+interface ClipDurationInfo {
+  clipId: string;
+  originalDuration: number;
+  speedMultiplier: number;
+  adjustedDuration: number; // Duration after speed adjustment
+  targetDuration: number;    // Target duration after smart distribution
+  trimStart: number;         // Where to start trimming
+  trimEnd: number;           // Where to end trimming
+}
+
 export class AutoMixingService {
+  /**
+   * Calculate smart duration distribution for clips
+   */
+  private calculateSmartDurations(
+    clips: VideoClip[],
+    targetDuration: number,
+    speeds: Map<string, number>,
+    distributionMode: 'proportional' | 'equal' | 'weighted' = 'proportional'
+  ): Map<string, ClipDurationInfo> {
+    const durations = new Map<string, ClipDurationInfo>();
+
+    // Step 1: Calculate adjusted durations after speed effects
+    let totalAdjustedDuration = 0;
+    const clipInfos: ClipDurationInfo[] = [];
+
+    for (const clip of clips) {
+      const speed = speeds.get(clip.id) || 1;
+      const adjustedDuration = clip.duration / speed;
+      totalAdjustedDuration += adjustedDuration;
+
+      clipInfos.push({
+        clipId: clip.id,
+        originalDuration: clip.duration,
+        speedMultiplier: speed,
+        adjustedDuration,
+        targetDuration: 0, // Will be calculated
+        trimStart: 0,
+        trimEnd: 0
+      });
+    }
+
+    // Step 2: Distribute target duration based on mode
+    if (distributionMode === 'equal') {
+      // Equal distribution: each clip gets equal duration
+      const equalDuration = targetDuration / clips.length;
+      for (const info of clipInfos) {
+        info.targetDuration = equalDuration;
+      }
+    } else if (distributionMode === 'proportional') {
+      // Proportional distribution: maintain relative durations
+      const scaleFactor = targetDuration / totalAdjustedDuration;
+      for (const info of clipInfos) {
+        info.targetDuration = info.adjustedDuration * scaleFactor;
+      }
+    } else if (distributionMode === 'weighted') {
+      // Weighted distribution: prioritize first and last clips
+      const weights = clips.map((_, index) => {
+        if (index === 0 || index === clips.length - 1) return 1.5;
+        return 1.0;
+      });
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+      for (let i = 0; i < clipInfos.length; i++) {
+        clipInfos[i].targetDuration = (weights[i] / totalWeight) * targetDuration;
+      }
+    }
+
+    // Step 3: Calculate trim points
+    for (const info of clipInfos) {
+      // Center the trim in the middle of the clip if possible
+      const excessDuration = info.adjustedDuration - info.targetDuration;
+      if (excessDuration > 0) {
+        // Need to trim
+        info.trimStart = excessDuration / 2;
+        info.trimEnd = info.trimStart + info.targetDuration;
+      } else {
+        // No trim needed, use full clip
+        info.trimStart = 0;
+        info.trimEnd = info.adjustedDuration;
+        // Note: If clip is shorter than target, it will be used fully
+        // Consider padding or repeating if needed
+      }
+
+      // Convert trim points back to original time (before speed adjustment)
+      info.trimStart = info.trimStart * info.speedMultiplier;
+      info.trimEnd = info.trimEnd * info.speedMultiplier;
+
+      durations.set(info.clipId, info);
+    }
+
+    return durations;
+  }
+
+  /**
+   * Build smart filter complex with intelligent duration distribution
+   */
+  private buildSmartFilterComplex(
+    variant: VideoVariant,
+    clips: VideoClip[],
+    durations: Map<string, ClipDurationInfo>
+  ): string[] {
+    const filters: string[] = [];
+    const processedVideos: string[] = [];
+
+    // Process each video with smart trimming
+    variant.videoOrder.forEach((videoId, index) => {
+      const clip = clips.find(c => c.id === videoId);
+      const durationInfo = durations.get(videoId);
+
+      if (!clip || !durationInfo) return;
+
+      // Apply trim to achieve target duration
+      let filterChain = `[${index}:v]`;
+
+      // Smart trim based on calculated durations
+      if (durationInfo.trimStart > 0 || durationInfo.trimEnd < clip.duration) {
+        filterChain += `trim=${durationInfo.trimStart}:${durationInfo.trimEnd},setpts=PTS-STARTPTS,`;
+      }
+
+      // Apply speed if needed
+      const speed = variant.speeds.get(videoId) || 1;
+      if (speed !== 1) {
+        filterChain += `setpts=${1/speed}*PTS,`;
+      }
+
+      // Apply other filters (scale, color, etc.)
+      const { finalWidth, finalHeight } = this.getOutputDimensions(variant.settings.aspectRatio, variant.settings.resolution);
+      filterChain += `scale=${finalWidth}:${finalHeight}:force_original_aspect_ratio=decrease,`;
+      filterChain += `pad=${finalWidth}:${finalHeight}:(ow-iw)/2:(oh-ih)/2:black`;
+
+      // Output to labeled stream
+      filterChain += `[v${index}]`;
+      filters.push(filterChain);
+      processedVideos.push(`[v${index}]`);
+    });
+
+    // Concatenate processed videos
+    if (processedVideos.length > 0) {
+      const concatFilter = `${processedVideos.join('')}concat=n=${processedVideos.length}:v=1:a=0[outv]`;
+      filters.push(concatFilter);
+    }
+
+    return filters;
+  }
+
   /**
    * Generate variants for group-based mixing
    */
@@ -490,6 +637,24 @@ export class AutoMixingService {
     // Track which videos have audio
     const hasAudioTrack: boolean[] = [];
 
+    // Check if smart duration distribution should be used
+    let durationInfoMap: Map<string, ClipDurationInfo> | null = null;
+    if (variant.settings.smartTrimming &&
+        variant.settings.durationType === 'fixed' &&
+        variant.settings.fixedDuration) {
+
+      // Calculate smart duration distribution
+      const orderedClips = variant.videoOrder.map(id => videoMap.get(id)!).filter(v => v);
+      durationInfoMap = this.calculateSmartDurations(
+        orderedClips,
+        variant.settings.fixedDuration,
+        variant.speeds,
+        variant.settings.durationDistributionMode || 'proportional'
+      );
+
+      logger.info(`Using smart duration distribution: ${variant.settings.fixedDuration}s target, mode: ${variant.settings.durationDistributionMode}`);
+    }
+
     variant.videoOrder.forEach((videoId, index) => {
       const video = videoMap.get(videoId);
       if (!video) {
@@ -500,6 +665,17 @@ export class AutoMixingService {
 
       // Build filter chain for each video
       let videoFilterChain: string[] = [];
+
+      // Apply smart trimming if enabled
+      if (durationInfoMap) {
+        const durationInfo = durationInfoMap.get(videoId);
+        if (durationInfo && (durationInfo.trimStart > 0 || durationInfo.trimEnd < video.duration)) {
+          // Apply smart trim to achieve target duration
+          videoFilterChain.push(`trim=${durationInfo.trimStart}:${durationInfo.trimEnd}`);
+          videoFilterChain.push(`setpts=PTS-STARTPTS`);
+          logger.info(`Smart trim for ${video.originalName}: ${durationInfo.trimStart}s to ${durationInfo.trimEnd}s (target: ${durationInfo.targetDuration}s)`);
+        }
+      }
 
       // 1. Get aspect ratio settings if specified
       const aspectRatio = variant.settings.aspectRatio || 'original';
@@ -631,11 +807,13 @@ export class AutoMixingService {
     commands.push('-b:v', this.getBitrateValue(variant.settings.bitrate));
     commands.push('-r', variant.settings.frameRate.toString());
 
-    // Note: Duration limiting disabled to ensure all videos are fully concatenated
-    // The full concatenated video will be produced without cutting
-    // if (variant.settings.durationType === 'fixed' && variant.settings.fixedDuration) {
-    //   commands.push('-t', variant.settings.fixedDuration.toString());
-    // }
+    // Apply duration control if specified (only if not using smart trimming)
+    if (variant.settings.durationType === 'fixed' &&
+        variant.settings.fixedDuration &&
+        !variant.settings.smartTrimming) {
+      commands.push('-t', variant.settings.fixedDuration.toString());
+      logger.info(`Applying fixed duration: ${variant.settings.fixedDuration} seconds`);
+    }
 
     // Add metadata
     const metadata = this.getMetadataInjection(variant.settings.metadataSource);

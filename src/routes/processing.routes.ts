@@ -17,4 +17,9 @@ router.get('/project/:projectId/jobs', processingController.getProjectJobs.bind(
 router.get('/outputs/:jobId', processingController.getJobOutputs.bind(processingController));
 router.get('/download/:outputId', processingController.downloadOutput.bind(processingController));
 
+// Batch download endpoints
+router.get('/job/:jobId/download-info', processingController.getBatchDownloadInfo.bind(processingController));
+router.post('/job/:jobId/download-batch', processingController.downloadBatch.bind(processingController));
+router.get('/job/:jobId/download-chunk', processingController.downloadBatchChunked.bind(processingController));
+
 export default router;

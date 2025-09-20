@@ -96,6 +96,7 @@ model ProcessingJob {
   creditsUsed  Int       @default(0) @map("credits_used")   // Credits used for this job
   outputCount  Int       @default(1) @map("output_count")   // Number of outputs to generate
   refundedAt   DateTime? @map("refunded_at")               // Timestamp if credits were refunded
+  settings     String?   @map("settings")                   // JSON string of processing settings used
   createdAt    DateTime  @default(now()) @map("created_at")
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
