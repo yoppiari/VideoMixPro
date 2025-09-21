@@ -41,6 +41,15 @@
      - Fixed spawn command di video-processing.service.ts line 858 - tidak pakai slice(1)
      - Fixed database reference dari `database.processingJob` ke `prisma.processingJob`
 
+8. **Different Starting Video Not Working** ✅ FIXED TODAY (21 Sept 2025, 12:00 PM)
+   - **Problem**: Option "Different Starting Video" tidak bekerja - variants masih mulai dengan clip yang sama
+   - **Root Cause**: Final selection menggunakan random shuffle, menghancurkan guarantee different starting videos
+   - **Solution**:
+     - Replaced random shuffle dengan round-robin selection di auto-mixing.service.ts lines 485-538
+     - Groups variants by starting video ID
+     - Round-robin picks from each group to ensure unique starting clips
+     - Added detailed logging untuk track distribution
+
 ### FITUR BARU YANG DITAMBAHKAN:
 
 1. **Smart Duration Distribution** ✅
@@ -137,6 +146,7 @@ npm start
 - [x] Job Details enhanced - Shows processing settings used
 - [x] Pagination implemented - 20 files per page di JobMonitor
 - [x] Video count issue fixed - All 3 videos now included in output
+- [x] Different Starting Video fixed - Round-robin selection ensures unique starting clips
 - [ ] Test full processing flow dengan video sebenarnya
 - [ ] Verify credit refund untuk failed jobs
 

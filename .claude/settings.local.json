@@ -72,7 +72,11 @@
       "Read(//c/**)",
       "Bash(set PORT=3003)",
       "Bash(set NODE_ENV=development)",
-      "Bash(del frontendnul)"
+      "Bash(del frontendnul)",
+      "Bash(ffprobe:*)",
+      "Bash(set DEBUG_MIXING=true)",
+      "Bash(del \"frontend\\nul\")",
+      "Bash(del \"frontend\\src\\services\\nul\")"
     ],
     "deny": [],
     "ask": []

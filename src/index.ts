@@ -96,6 +96,9 @@ const startServer = async (): Promise<void> => {
     await database.connect();
     logger.info('Database connected successfully');
 
+    // Clean up stale jobs from previous sessions
+    await cleanupStaleJobs();
+
     // Start production services
     if (process.env.NODE_ENV === 'production') {
       cleanupService.start();
@@ -111,6 +114,77 @@ const startServer = async (): Promise<void> => {
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
+  }
+};
+
+// Clean up stale jobs from previous server sessions
+const cleanupStaleJobs = async (): Promise<void> => {
+  try {
+    const prisma = await database.connect();
+
+    // Find all jobs that were processing when server was shut down
+    const staleJobs = await prisma.processingJob.findMany({
+      where: {
+        status: 'PROCESSING'
+      },
+      select: {
+        id: true,
+        projectId: true
+      }
+    });
+
+    if (staleJobs.length > 0) {
+      logger.info(`Found ${staleJobs.length} stale processing jobs from previous session`);
+
+      // Mark them as failed or cancelled
+      await prisma.processingJob.updateMany({
+        where: {
+          status: 'PROCESSING'
+        },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errorMessage: 'Job interrupted by server restart'
+        }
+      });
+
+      // Update associated projects back to DRAFT
+      const projectIds = [...new Set(staleJobs.map(job => job.projectId))];
+      await prisma.project.updateMany({
+        where: {
+          id: { in: projectIds }
+        },
+        data: {
+          status: 'DRAFT'
+        }
+      });
+
+      logger.info(`Cleaned up ${staleJobs.length} stale jobs`);
+    }
+
+    // Also clean up any cancelled jobs that might have been stuck
+    const cancelledButProcessing = await prisma.processingJob.findMany({
+      where: {
+        status: 'CANCELLED',
+        completedAt: null
+      }
+    });
+
+    if (cancelledButProcessing.length > 0) {
+      await prisma.processingJob.updateMany({
+        where: {
+          status: 'CANCELLED',
+          completedAt: null
+        },
+        data: {
+          completedAt: new Date()
+        }
+      });
+      logger.info(`Fixed ${cancelledButProcessing.length} cancelled jobs with missing completion time`);
+    }
+  } catch (error) {
+    logger.error('Failed to clean up stale jobs:', error);
+    // Don't prevent server startup on cleanup failure
   }
 };
 

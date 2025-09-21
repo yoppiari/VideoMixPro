@@ -58,6 +58,17 @@ export class ProcessingController {
       const processingSettings = mixingSettings || (project.settings as any);
       const outputCount = processingSettings.outputCount || 1;
 
+      // Log settings for debugging and validation
+      logger.info('[Settings Received] Processing controller received settings:', JSON.stringify({
+        hasCustomSettings: !!mixingSettings,
+        durationType: processingSettings.durationType,
+        fixedDuration: processingSettings.fixedDuration,
+        smartTrimming: processingSettings.smartTrimming,
+        durationDistributionMode: processingSettings.durationDistributionMode,
+        outputCount: outputCount,
+        videoCount: project.videoFiles.length
+      }));
+
       // Calculate credit cost using the actual settings that will be used for processing
       const creditsRequired = this.calculateCreditsRequired(outputCount, processingSettings);
 
@@ -190,20 +201,8 @@ export class ProcessingController {
         return;
       }
 
-      // Cancel the job in queue
+      // Cancel the job - this will update database and kill FFmpeg process
       await videoProcessingService.cancelJob(jobId);
-
-      // Update job status
-      await prisma.processingJob.update({
-        where: { id: jobId },
-        data: { status: JobStatus.CANCELLED }
-      });
-
-      // Update project status back to draft
-      await prisma.project.update({
-        where: { id: job.projectId },
-        data: { status: ProjectStatus.DRAFT }
-      });
 
       ResponseHelper.success(res, null, 'Job cancelled successfully');
     } catch (error) {

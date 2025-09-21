@@ -481,11 +481,64 @@ export class AutoMixingService {
         }
       }
 
-      // Randomly select requested number of variants
+      // Select variants ensuring different starting videos when enabled
       if (variants.length > settings.outputCount) {
-        // Shuffle and take first outputCount items
-        const shuffled = this.shuffleArray(variants);
-        return shuffled.slice(0, settings.outputCount);
+        if (settings.differentStartingVideo) {
+          // Group variants by their starting video ID
+          const groupedByStartVideo = new Map<string, VideoVariant[]>();
+
+          for (const variant of variants) {
+            const startVideoId = variant.order[0];
+            if (!groupedByStartVideo.has(startVideoId)) {
+              groupedByStartVideo.set(startVideoId, []);
+            }
+            groupedByStartVideo.get(startVideoId)!.push(variant);
+          }
+
+          // Round-robin selection from each starting video group
+          const selectedVariants: VideoVariant[] = [];
+          const groups = Array.from(groupedByStartVideo.values());
+
+          // Shuffle within each group for variety
+          for (const group of groups) {
+            this.shuffleArray(group);
+          }
+
+          // Round-robin selection
+          let groupIndex = 0;
+          const groupPointers = new Array(groups.length).fill(0);
+
+          while (selectedVariants.length < settings.outputCount) {
+            const currentGroup = groups[groupIndex];
+            const pointer = groupPointers[groupIndex];
+
+            // If this group still has variants to offer
+            if (pointer < currentGroup.length) {
+              selectedVariants.push(currentGroup[pointer]);
+              groupPointers[groupIndex]++;
+            }
+
+            // Move to next group (round-robin)
+            groupIndex = (groupIndex + 1) % groups.length;
+
+            // Check if all groups are exhausted
+            const allExhausted = groupPointers.every((ptr, idx) => ptr >= groups[idx].length);
+            if (allExhausted) {
+              break;
+            }
+          }
+
+          // Log detailed selection info
+          const startingVideos = selectedVariants.map(v => v.order[0]);
+          const uniqueStarts = new Set(startingVideos);
+          logger.info(`[AutoMixing] Selected ${selectedVariants.length} variants with ${uniqueStarts.size} unique starting videos from ${groups.length} groups`);
+          logger.info(`[AutoMixing] Starting video distribution:`, Array.from(uniqueStarts).join(', '));
+          return selectedVariants;
+        } else {
+          // Original logic: random shuffle
+          const shuffled = this.shuffleArray(variants);
+          return shuffled.slice(0, settings.outputCount);
+        }
       }
 
       return variants;
