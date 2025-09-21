@@ -7,6 +7,7 @@ import { MixingMode, VideoFormat, VideoQuality } from '@/types';
 import logger from '@/utils/logger';
 import { promisify } from 'util';
 import { AutoMixingService, VideoClip, VideoGroup } from './auto-mixing.service';
+import processingMonitor from './processing-monitor.service';
 import { ErrorHandlingService } from './error-handling.service';
 import { RetryService } from './retry.service';
 
@@ -92,6 +93,7 @@ export interface VideoMixingOptions {
 
 export class VideoProcessingService {
   private activeJobs = new Map<string, boolean>();
+  private ffmpegProcesses = new Map<string, any>(); // Store FFmpeg child processes for cancellation
   private readonly tempDir = process.env.TEMP_DIR || 'temp';
   private readonly outputDir = process.env.OUTPUT_DIR || 'outputs';
   private readonly thumbnailDir = process.env.THUMBNAIL_DIR || 'thumbnails';
@@ -112,14 +114,100 @@ export class VideoProcessingService {
   }
 
   async queueProcessingJob(jobId: string, data: ProcessingJobData): Promise<void> {
-    // In production, this would use Bull Queue or similar
-    // For now, we'll process immediately in background
-    setImmediate(() => this.processVideo(jobId, data));
+    try {
+      // Check if job is already cancelled or completed
+      const job = await prisma.processingJob.findUnique({
+        where: { id: jobId },
+        select: { status: true }
+      });
+
+      if (!job) {
+        logger.error(`Job ${jobId} not found in database`);
+        return;
+      }
+
+      // Don't process cancelled, completed, or failed jobs
+      if (job.status === JobStatus.CANCELLED) {
+        logger.info(`Job ${jobId} is cancelled, skipping processing`);
+        return;
+      }
+
+      if (job.status === JobStatus.COMPLETED) {
+        logger.info(`Job ${jobId} is already completed, skipping processing`);
+        return;
+      }
+
+      if (job.status === JobStatus.FAILED) {
+        logger.info(`Job ${jobId} has failed, skipping processing`);
+        return;
+      }
+
+      // Mark job as active
+      this.activeJobs.set(jobId, true);
+
+      // In production, this would use Bull Queue or similar
+      // For now, we'll process immediately in background
+      setImmediate(() => this.processVideo(jobId, data));
+    } catch (error) {
+      logger.error(`Failed to queue job ${jobId}:`, error);
+    }
   }
 
   async cancelJob(jobId: string): Promise<void> {
+    // Mark job as cancelled in memory
     this.activeJobs.set(jobId, false);
-    logger.info(`Job ${jobId} marked for cancellation`);
+
+    // Kill FFmpeg process if running
+    const ffmpegProcess = this.ffmpegProcesses.get(jobId);
+    if (ffmpegProcess) {
+      logger.info(`Killing FFmpeg process for job ${jobId}`);
+      try {
+        // Kill the process and all its children
+        if (process.platform === 'win32') {
+          // On Windows, use taskkill to kill process tree
+          const { exec } = await import('child_process');
+          exec(`taskkill //pid ${ffmpegProcess.pid} //T //F`, (error) => {
+            if (error) {
+              logger.error(`Failed to kill FFmpeg process: ${error.message}`);
+            }
+          });
+        } else {
+          // On Unix-like systems
+          ffmpegProcess.kill('SIGKILL');
+        }
+        this.ffmpegProcesses.delete(jobId);
+      } catch (error) {
+        logger.error(`Error killing FFmpeg process for job ${jobId}:`, error);
+      }
+    }
+
+    // Update database to ensure cancellation persists
+    try {
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: {
+          status: JobStatus.CANCELLED,
+          completedAt: new Date()
+        }
+      });
+
+      // Update project status
+      const job = await prisma.processingJob.findUnique({
+        where: { id: jobId },
+        select: { projectId: true }
+      });
+
+      if (job) {
+        await prisma.project.update({
+          where: { id: job.projectId },
+          data: { status: ProjectStatus.DRAFT }
+        });
+      }
+    } catch (error) {
+      logger.error(`Failed to update cancelled job ${jobId} in database:`, error);
+    }
+
+    logger.info(`Job ${jobId} cancelled and database updated`);
   }
 
   /**
@@ -434,10 +522,29 @@ export class VideoProcessingService {
       const settings = data.settings;
       const outputs: string[] = [];
 
+      // Start monitoring this job
+      const expectedVideoCount = project.videoFiles.length;
+      processingMonitor.startMonitoring(jobId, expectedVideoCount, settings);
+      processingMonitor.logStage(jobId, 'PROJECT_LOADED', {
+        videoCount: expectedVideoCount,
+        projectName: project.name,
+        settings
+      });
+
       for (let i = 0; i < data.outputCount; i++) {
-        // Check if job was cancelled
-        if (!this.activeJobs.get(jobId)) {
+        // Check if job was cancelled - check both memory and database
+        const jobStatus = await prisma.processingJob.findUnique({
+          where: { id: jobId },
+          select: { status: true }
+        });
+
+        if (!this.activeJobs.get(jobId) || jobStatus?.status === JobStatus.CANCELLED) {
           logger.info(`Job ${jobId} was cancelled`);
+          // Clean up FFmpeg process if exists
+          const ffmpegProcess = this.ffmpegProcesses.get(jobId);
+          if (ffmpegProcess) {
+            this.ffmpegProcesses.delete(jobId);
+          }
           return;
         }
 
@@ -582,6 +689,10 @@ export class VideoProcessingService {
   private async processAutoMixing(project: any, settings: any, index: number): Promise<string> {
     const videoFiles = project.videoFiles;
 
+    // Enhanced logging for debugging
+    logger.info(`[Auto-Mixing] Starting auto-mixing for output ${index + 1}`);
+    logger.info(`[Auto-Mixing] Project "${project.name}" has ${videoFiles.length} video files`);
+
     if (videoFiles.length === 0) {
       throw new Error('No video files to process');
     }
@@ -590,7 +701,10 @@ export class VideoProcessingService {
       throw new Error('Minimum 2 videos required for mixing');
     }
 
-    logger.info(`Processing auto-mixing for output ${index + 1}`);
+    // Log details of each video file
+    videoFiles.forEach((file: any, idx: number) => {
+      logger.info(`[Auto-Mixing] Video ${idx + 1}/${videoFiles.length}: ${file.originalName} - ID: ${file.id}, Path: ${file.path}, Duration: ${file.duration}s`);
+    });
 
     // Convert video files to VideoClip format for auto-mixing service
     const clips: VideoClip[] = videoFiles.map((file: any) => ({
@@ -605,6 +719,8 @@ export class VideoProcessingService {
       originalName: file.originalName,
       groupId: file.groupId
     }));
+
+    logger.info(`[Auto-Mixing] Converted ${videoFiles.length} video files to ${clips.length} clips for processing`);
 
     // Map VideoMixingOptions to MixingSettings for auto-mixing service
     const mixingSettings = {
@@ -640,6 +756,8 @@ export class VideoProcessingService {
       // Duration
       durationType: settings.durationType || 'original',
       fixedDuration: settings.fixedDuration || 30,
+      smartTrimming: settings.smartTrimming === true, // CRITICAL: Pass smart trimming setting
+      durationDistributionMode: settings.durationDistributionMode || 'proportional', // CRITICAL: Pass distribution mode
 
       // Audio
       audioMode: settings.audioMode || 'keep',
@@ -647,6 +765,24 @@ export class VideoProcessingService {
       // Output
       outputCount: settings.outputCount || 1
     };
+
+    // Log complete settings for debugging
+    logger.info('[Settings Validation] Processing with settings:', JSON.stringify({
+      durationType: mixingSettings.durationType,
+      fixedDuration: mixingSettings.fixedDuration,
+      smartTrimming: mixingSettings.smartTrimming,
+      durationDistributionMode: mixingSettings.durationDistributionMode,
+      videoCount: clips.length,
+      outputCount: mixingSettings.outputCount
+    }));
+
+    // Track settings in monitor
+    processingMonitor.logStage('current-job', 'AUTO_MIXING_SETTINGS', {
+      settings: mixingSettings,
+      videoCount: clips.length,
+      hasSmartTrimming: mixingSettings.smartTrimming,
+      durationType: mixingSettings.durationType
+    });
 
     // Prepare groups if group mixing is enabled
     let groups = undefined;
@@ -663,20 +799,33 @@ export class VideoProcessingService {
     }
 
     // Generate variants based on new mixing settings
+    logger.info(`[Auto-Mixing] Generating variants with ${clips.length} clips`);
     const variants = await this.autoMixingService.generateVariants(clips, mixingSettings, groups);
+
+    logger.info(`[Auto-Mixing] Generated ${variants.length} variants`);
 
     if (index >= variants.length) {
       throw new Error(`Not enough variants generated. Requested: ${index + 1}, Available: ${variants.length}`);
     }
 
     const variant = variants[index];
-    logger.info(`Processing variant ${variant.id} with order: ${variant.videoOrder.join(', ')}`);
+    logger.info(`[Auto-Mixing] Selected variant ${variant.id} with ${variant.videoOrder.length} videos in order: [${variant.videoOrder.join(', ')}]`);
+
+    // Verify all videos in variant order exist in clips
+    const clipIds = clips.map(c => c.id);
+    variant.videoOrder.forEach(vid => {
+      if (!clipIds.includes(vid)) {
+        logger.error(`[Auto-Mixing] ERROR: Variant contains video ID ${vid} which is not in clips array!`);
+      }
+    });
 
     // Build output path
     const outputFileName = `output_${index + 1}_${Date.now()}.mp4`;
     const outputPath = path.join(this.outputDir, outputFileName);
+    logger.info(`[Auto-Mixing] Output will be saved to: ${outputPath}`);
 
     // Build FFmpeg command for this variant
+    logger.info(`[Auto-Mixing] Building FFmpeg command with ${clips.length} clips for variant`);
     const ffmpegCommand = this.autoMixingService.buildFFmpegCommand(
       variant,
       clips,
@@ -695,19 +844,28 @@ export class VideoProcessingService {
       const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || 'ffmpeg';
       const child_process = require('child_process');
 
-      // Log the full command for debugging
+      // Log the full command for debugging - ALWAYS log this for troubleshooting
       logger.info(`Executing FFmpeg command with ${command.length} arguments`);
-      logger.debug(`Full command: ${command.join(' ')}`);
+      logger.info(`Full FFmpeg command: ${command.join(' ')}`);
 
-      const proc = child_process.spawn(ffmpegPath, command.slice(1)); // Remove 'ffmpeg' from command array
+      // Extract input count from command for verification
+      const inputCount = command.filter(arg => arg === '-i').length;
+      logger.info(`[FFmpeg Verification] Processing ${inputCount} input videos`);
+
+      // Track FFmpeg command in monitor
+      processingMonitor.logFFmpegCommand('current-job', `${ffmpegPath} ${command.join(' ')}`);
+
+      const proc = child_process.spawn(ffmpegPath, command); // Use command array directly (no 'ffmpeg' in array)
 
       let stderr = '';
+      let fullStderr = ''; // Capture complete stderr for debugging
       let lastProgress = '';
       let errorMessages: string[] = [];
 
       proc.stderr.on('data', (data: Buffer) => {
         const output = data.toString();
         stderr += output;
+        fullStderr += output; // Capture complete stderr
 
         // Capture specific error patterns
         const errorPatterns = [
@@ -745,6 +903,15 @@ export class VideoProcessingService {
           // Build detailed error message
           let errorMessage = `FFmpeg process failed with exit code ${code}`;
 
+          // Add Windows-specific error code descriptions
+          if (code === 3221225794) {
+            errorMessage += ' (0xC0000142 - Application failed to initialize properly, command may be malformed)';
+          } else if (code === 3221225477) {
+            errorMessage += ' (0xC0000005 - Access violation)';
+          } else if (code === 1) {
+            errorMessage += ' (General error - check input files and parameters)';
+          }
+
           if (errorMessages.length > 0) {
             errorMessage = `FFmpeg error: ${errorMessages.join('; ')}`;
           } else {
@@ -755,25 +922,33 @@ export class VideoProcessingService {
               line.includes('No such') ||
               line.includes('failed') ||
               line.includes('Unable') ||
-              line.includes('Cannot')
-            ).slice(-10); // Get last 10 error lines for more context
+              line.includes('Cannot') ||
+              line.includes('not found') ||
+              line.includes('does not exist')
+            ).slice(-15); // Get last 15 error lines for more context
 
             if (errorLines.length > 0) {
               errorMessage = `FFmpeg failed: ${errorLines.join('; ')}`;
             }
           }
 
-          // Log full stderr for debugging
+          // Log full stderr for debugging with command details
           logger.error(errorMessage);
-          if (stderr.length > 0) {
-            // Log last 1000 characters of stderr for debugging
-            const stderrSnapshot = stderr.length > 1000 ? '...' + stderr.slice(-1000) : stderr;
-            logger.debug(`FFmpeg stderr (last 1000 chars): ${stderrSnapshot}`);
+          logger.error(`FFmpeg command was: ${ffmpegPath} ${command.join(' ')}`);
+          if (fullStderr.length > 0) {
+            // Log complete FFmpeg output for troubleshooting
+            logger.error(`[FFmpeg Full Output] Complete stderr output:\n${fullStderr}`);
+
+            // Also check for trim issues
+            const trimWarnings = fullStderr.match(/trim.*?invalid|trim.*?exceed|trim.*?out of range/gi);
+            if (trimWarnings) {
+              logger.error(`[FFmpeg Trim Issues] Found trim problems: ${trimWarnings.join('; ')}`);
+            }
           }
 
           const error = new Error(errorMessage);
           (error as any).ffmpegExitCode = code;
-          (error as any).ffmpegStderr = stderr;
+          (error as any).ffmpegStderr = fullStderr || stderr;
           reject(error);
         }
       });
@@ -1301,7 +1476,7 @@ export class VideoProcessingService {
    */
   async refundCreditsForFailedJob(jobId: string): Promise<boolean> {
     try {
-      const job = await database.processingJob.findUnique({
+      const job = await prisma.processingJob.findUnique({
         where: { id: jobId },
         include: {
           project: {
@@ -1413,7 +1588,7 @@ export class VideoProcessingService {
     const activeJobs = this.activeJobs.size;
 
     // Get stats from database
-    const jobs = await database.processingJob.findMany({
+    const jobs = await prisma.processingJob.findMany({
       where: {
         status: { in: [JobStatus.COMPLETED, JobStatus.FAILED] },
         completedAt: { not: null },

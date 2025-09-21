@@ -149,12 +149,12 @@ export class AutoMixingService {
       }
     }
 
-    // Step 3: Calculate trim points
+    // Step 3: Calculate trim points with validation
     for (const info of clipInfos) {
       // Center the trim in the middle of the clip if possible
       const excessDuration = info.adjustedDuration - info.targetDuration;
       if (excessDuration > 0) {
-        // Need to trim
+        // Need to trim - center in the middle
         info.trimStart = excessDuration / 2;
         info.trimEnd = info.trimStart + info.targetDuration;
       } else {
@@ -162,14 +162,32 @@ export class AutoMixingService {
         info.trimStart = 0;
         info.trimEnd = info.adjustedDuration;
         // Note: If clip is shorter than target, it will be used fully
-        // Consider padding or repeating if needed
       }
 
       // Convert trim points back to original time (before speed adjustment)
       info.trimStart = info.trimStart * info.speedMultiplier;
       info.trimEnd = info.trimEnd * info.speedMultiplier;
 
+      // CRITICAL: Validate trim values are within bounds
+      const originalDuration = info.originalDuration;
+      if (info.trimEnd > originalDuration) {
+        logger.warn(`[Smart Duration] Clip ${info.clipId} trim end (${info.trimEnd}s) exceeds duration (${originalDuration}s), adjusting...`);
+        info.trimEnd = originalDuration;
+        // Adjust start if needed to maintain some duration
+        if (info.trimStart >= info.trimEnd - 0.1) {
+          info.trimStart = Math.max(0, info.trimEnd - Math.min(info.targetDuration, originalDuration));
+        }
+      }
+
+      // Ensure minimum duration
+      if (info.trimEnd - info.trimStart < 0.1) {
+        logger.warn(`[Smart Duration] Clip ${info.clipId} duration too short, using full clip`);
+        info.trimStart = 0;
+        info.trimEnd = originalDuration;
+      }
+
       durations.set(info.clipId, info);
+      logger.info(`[Smart Duration] Clip ${info.clipId}: trim=${info.trimStart.toFixed(2)}:${info.trimEnd.toFixed(2)}, original=${originalDuration.toFixed(2)}s, target=${info.targetDuration.toFixed(2)}s`);
     }
 
     return durations;
@@ -366,6 +384,11 @@ export class AutoMixingService {
     try {
       const variants: VideoVariant[] = [];
 
+      logger.info(`[Variant Generation] Starting with ${videos.length} videos`);
+      videos.forEach((v, idx) => {
+        logger.info(`[Variant Generation] Video ${idx + 1}: ${v.originalName} (ID: ${v.id})`);
+      });
+
       // Validate minimum videos
       if (videos.length < 2) {
         throw new Error('Minimum 2 videos required for mixing');
@@ -373,6 +396,7 @@ export class AutoMixingService {
 
       // Get all possible orders
       let orders: string[][] = [videos.map(v => v.id)]; // Default order
+      logger.info(`[Variant Generation] Default order: [${orders[0].join(', ')}]`);
 
       // Check if group-based mixing should be used
       if (settings.groupMixing && groups && groups.length > 0) {
@@ -593,38 +617,63 @@ export class AutoMixingService {
     const commands: string[] = [];
     const videoMap = new Map(videos.map(v => [v.id, v]));
 
-    // Log video order for debugging
-    logger.info(`Building FFmpeg command for ${variant.videoOrder.length} videos`);
+    // Enhanced logging for debugging
+    logger.info(`[FFmpeg Build] Starting command build for variant ${variant.id}`);
+    logger.info(`[FFmpeg Build] Total videos provided: ${videos.length}`);
+    logger.info(`[FFmpeg Build] Video order in variant: ${variant.videoOrder.length} videos - [${variant.videoOrder.join(', ')}]`);
+    logger.info(`[FFmpeg Build] Video map contains: ${videoMap.size} videos`);
 
-    // Validate all videos exist
-    const validVideos: VideoClip[] = [];
-    const missingVideos: string[] = [];
+    // Validate all videos exist - DO NOT FILTER, THROW ERRORS
+    const validatedVideos: VideoClip[] = [];
+    const validationIssues: string[] = [];
+    let allVideosValid = true;
 
     variant.videoOrder.forEach((id, idx) => {
       const video = videoMap.get(id);
-      if (video) {
-        // Check if file exists
-        if (!fs.existsSync(video.path)) {
-          missingVideos.push(`${video.originalName || video.path} (${video.path})`);
-          logger.error(`Video file not found: ${video.path}`);
-        } else {
-          logger.info(`Video ${idx + 1}: ${video.originalName || video.path} (Duration: ${video.duration}s, Path: ${video.path})`);
-          validVideos.push(video);
-        }
+      logger.info(`[FFmpeg Build] Validating video ${idx + 1}/${variant.videoOrder.length}: ID=${id}`);
+
+      if (!video) {
+        const issue = `Video ${idx + 1}: ID '${id}' not found in video map (map has: ${Array.from(videoMap.keys()).join(', ')})`;
+        validationIssues.push(issue);
+        logger.error(`[FFmpeg Build] ${issue}`);
+        allVideosValid = false;
       } else {
-        missingVideos.push(`Video ID: ${id}`);
-        logger.error(`Video ID ${id} not found in video map`);
+        // Check if file exists
+        const fileExists = fs.existsSync(video.path);
+        logger.info(`[FFmpeg Build] Video ${idx + 1}: ${video.originalName || 'unnamed'} - Path: ${video.path}, Exists: ${fileExists}, Duration: ${video.duration}s`);
+
+        if (!fileExists) {
+          const issue = `Video ${idx + 1}: File not found - ${video.originalName || 'unnamed'} at path: ${video.path}`;
+          validationIssues.push(issue);
+          logger.error(`[FFmpeg Build] ${issue}`);
+          allVideosValid = false;
+        } else {
+          validatedVideos.push(video);
+        }
       }
     });
 
-    // Throw detailed error if videos are missing
-    if (missingVideos.length > 0) {
-      throw new Error(`Cannot process videos. Missing files:\n${missingVideos.join('\n')}\n\nPlease ensure all video files exist and are accessible.`);
+    // Report validation results
+    logger.info(`[FFmpeg Build] Validation complete: ${validatedVideos.length}/${variant.videoOrder.length} videos valid`);
+
+    // IMPORTANT: Throw error if ANY video is invalid - don't proceed with partial set
+    if (!allVideosValid || validationIssues.length > 0) {
+      const errorMsg = `Cannot process videos - validation failed!\n` +
+                      `Expected: ${variant.videoOrder.length} videos\n` +
+                      `Valid: ${validatedVideos.length} videos\n` +
+                      `Issues:\n${validationIssues.join('\n')}\n\n` +
+                      `Please ensure all video files exist and are accessible.`;
+      logger.error(`[FFmpeg Build] ${errorMsg}`);
+      throw new Error(errorMsg);
     }
 
-    if (validVideos.length < 2) {
-      throw new Error(`Minimum 2 videos required for mixing. Found: ${validVideos.length}`);
+    if (validatedVideos.length < 2) {
+      throw new Error(`Minimum 2 videos required for mixing. Found: ${validatedVideos.length}`);
     }
+
+    // Use validatedVideos instead of the filtered validVideos
+    const actualVideoCount = validatedVideos.length;
+    logger.info(`[FFmpeg Build] Proceeding with ${actualVideoCount} videos for concatenation`);
 
     // Build input files
     const inputs: string[] = [];
@@ -645,21 +694,35 @@ export class AutoMixingService {
 
       // Calculate smart duration distribution
       const orderedClips = variant.videoOrder.map(id => videoMap.get(id)!).filter(v => v);
-      durationInfoMap = this.calculateSmartDurations(
-        orderedClips,
-        variant.settings.fixedDuration,
-        variant.speeds,
-        variant.settings.durationDistributionMode || 'proportional'
-      );
 
-      logger.info(`Using smart duration distribution: ${variant.settings.fixedDuration}s target, mode: ${variant.settings.durationDistributionMode}`);
+      // IMPORTANT: Only use smart trimming if we have valid clips
+      if (orderedClips.length === validatedVideos.length) {
+        try {
+          durationInfoMap = this.calculateSmartDurations(
+            orderedClips,
+            variant.settings.fixedDuration,
+            variant.speeds,
+            variant.settings.durationDistributionMode || 'proportional'
+          );
+
+          logger.info(`[Smart Trim] Using smart duration distribution: ${variant.settings.fixedDuration}s target, mode: ${variant.settings.durationDistributionMode}, videos: ${orderedClips.length}`);
+        } catch (error) {
+          logger.error(`[Smart Trim] Failed to calculate smart durations: ${error}`);
+          logger.warn(`[Smart Trim] Falling back to fixed duration without smart trimming`);
+          variant.settings.smartTrimming = false;
+          durationInfoMap = null;
+        }
+      } else {
+        logger.warn(`[Smart Trim] Clip count mismatch (ordered: ${orderedClips.length}, validated: ${validatedVideos.length}), falling back to fixed duration`);
+        // Fall back to fixed duration without smart trimming
+        variant.settings.smartTrimming = false;
+      }
     }
 
-    variant.videoOrder.forEach((videoId, index) => {
-      const video = videoMap.get(videoId);
-      if (!video) {
-        throw new Error(`Critical error: Video ID ${videoId} not found`);
-      }
+    // Process validated videos in the order specified by variant
+    validatedVideos.forEach((video, index) => {
+      const videoId = video.id;
+      logger.info(`[FFmpeg Build] Processing video ${index + 1}: ${video.originalName} (ID: ${videoId})`);
 
       inputs.push('-i', video.path);
 
@@ -669,11 +732,21 @@ export class AutoMixingService {
       // Apply smart trimming if enabled
       if (durationInfoMap) {
         const durationInfo = durationInfoMap.get(videoId);
-        if (durationInfo && (durationInfo.trimStart > 0 || durationInfo.trimEnd < video.duration)) {
-          // Apply smart trim to achieve target duration
-          videoFilterChain.push(`trim=${durationInfo.trimStart}:${durationInfo.trimEnd}`);
-          videoFilterChain.push(`setpts=PTS-STARTPTS`);
-          logger.info(`Smart trim for ${video.originalName}: ${durationInfo.trimStart}s to ${durationInfo.trimEnd}s (target: ${durationInfo.targetDuration}s)`);
+        if (durationInfo) {
+          // Validate trim values to ensure they're within video bounds
+          const safeStart = Math.max(0, Math.min(durationInfo.trimStart, video.duration - 0.1));
+          const safeEnd = Math.min(video.duration, Math.max(durationInfo.trimEnd, safeStart + 0.1));
+
+          // Only apply trim if it's meaningful (not the full video)
+          if (safeStart > 0.01 || safeEnd < video.duration - 0.01) {
+            videoFilterChain.push(`trim=${safeStart}:${safeEnd}`);
+            videoFilterChain.push(`setpts=PTS-STARTPTS`);
+            logger.info(`[Smart Trim] ${video.originalName}: trim=${safeStart.toFixed(2)}:${safeEnd.toFixed(2)} (duration: ${video.duration}s, target: ${durationInfo.targetDuration.toFixed(2)}s)`);
+          } else {
+            logger.info(`[Smart Trim] ${video.originalName}: Using full video (duration: ${video.duration}s)`);
+          }
+        } else {
+          logger.warn(`[Smart Trim] No duration info for video ${videoId}, using full video`);
         }
       }
 
@@ -759,24 +832,24 @@ export class AutoMixingService {
 
     // Concat videos - ensure proper stream mapping
     let finalVideoOutput = 'outv';
-    const actualVideoCount = variant.videoOrder.length;
+    // Use the actual number of validated videos for concatenation
+    const concatenationVideoCount = validatedVideos.length;
 
-    logger.info(`Concatenating ${actualVideoCount} videos`);
+    logger.info(`[FFmpeg Build] Concatenating ${concatenationVideoCount} videos (validated from ${variant.videoOrder.length} in variant order)`);
 
     if (variant.settings.audioMode === 'mute') {
       // Video-only concatenation
-      const videoInputs = variant.videoOrder.map((_, i) => `[v${i}]`).join('');
-      filters.push(`${videoInputs}concat=n=${actualVideoCount}:v=1:a=0[${finalVideoOutput}]`);
+      const videoInputs = validatedVideos.map((_, i) => `[v${i}]`).join('');
+      filters.push(`${videoInputs}concat=n=${concatenationVideoCount}:v=1:a=0[${finalVideoOutput}]`);
     } else {
       // Video and audio concatenation - ensure all streams are present
-      const concatInputs = variant.videoOrder.map((_, i) => `[v${i}][a${i}]`).join('');
-      filters.push(`${concatInputs}concat=n=${actualVideoCount}:v=1:a=1[${finalVideoOutput}][outa]`);
+      const concatInputs = validatedVideos.map((_, i) => `[v${i}][a${i}]`).join('');
+      filters.push(`${concatInputs}concat=n=${concatenationVideoCount}:v=1:a=1[${finalVideoOutput}][outa]`);
     }
 
     // Note: Aspect ratio already applied per video, no need to apply again after concatenation
 
-    // Build FFmpeg command
-    commands.push('ffmpeg');
+    // Build FFmpeg command arguments (without 'ffmpeg' as it's the executable name)
     commands.push('-y'); // Overwrite output at the beginning
 
     // Add input validation
@@ -807,12 +880,15 @@ export class AutoMixingService {
     commands.push('-b:v', this.getBitrateValue(variant.settings.bitrate));
     commands.push('-r', variant.settings.frameRate.toString());
 
-    // Apply duration control if specified (only if not using smart trimming)
-    if (variant.settings.durationType === 'fixed' &&
-        variant.settings.fixedDuration &&
-        !variant.settings.smartTrimming) {
-      commands.push('-t', variant.settings.fixedDuration.toString());
-      logger.info(`Applying fixed duration: ${variant.settings.fixedDuration} seconds`);
+    // Apply duration control based on smartTrimming setting
+    if (variant.settings.durationType === 'fixed' && variant.settings.fixedDuration) {
+      if (!variant.settings.smartTrimming) {
+        // When smart trimming is disabled, cut the final output to the specified duration
+        commands.push('-t', variant.settings.fixedDuration.toString());
+        logger.info(`[Duration Control] Applying fixed duration to final output: ${variant.settings.fixedDuration} seconds (smartTrimming: false)`);
+      } else {
+        logger.info(`[Duration Control] Smart trimming enabled - duration applied per video, not to final output`);
+      }
     }
 
     // Add metadata
@@ -862,8 +938,17 @@ export class AutoMixingService {
     commands.push(outputPath);
 
     // Log the complete command for debugging
-    logger.info('FFmpeg command:', commands.join(' '));
+    logger.info('FFmpeg command arguments:', commands.join(' '));
     logger.info(`Output will contain ${actualVideoCount} concatenated videos`);
+
+    // Final verification - ensure command has correct number of inputs
+    const commandInputCount = commands.filter(arg => arg === '-i').length;
+    if (commandInputCount !== actualVideoCount) {
+      logger.error(`[FFmpeg Verification] Command input mismatch! Expected ${actualVideoCount} inputs, found ${commandInputCount}`);
+      throw new Error(`FFmpeg command validation failed: input count mismatch (${commandInputCount} vs ${actualVideoCount})`);
+    }
+
+    logger.info(`[FFmpeg Verification] Command validated: ${commandInputCount} input videos confirmed`);
 
     return commands;
   }
