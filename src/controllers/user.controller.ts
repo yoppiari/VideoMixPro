@@ -157,26 +157,120 @@ export class UserController {
         return;
       }
 
-      const { page = '1', limit = '10' } = req.query as any;
+      const { page = '1', limit = '20', type, startDate, endDate } = req.query as any;
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
       const skip = (pageNum - 1) * limitNum;
 
-      const [transactions, total] = await Promise.all([
+      // Build filter conditions
+      const where: any = { userId };
+      if (type) {
+        where.type = type;
+      }
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) where.createdAt.gte = new Date(startDate);
+        if (endDate) where.createdAt.lte = new Date(endDate);
+      }
+
+      const [transactions, total, currentBalance] = await Promise.all([
         prisma.creditTransaction.findMany({
-          where: { userId },
+          where,
           orderBy: { createdAt: 'desc' },
           skip,
-          take: limitNum
+          take: limitNum,
+          include: {
+            payment: {
+              select: {
+                receiptNumber: true,
+                paymentMethod: true,
+                status: true
+              }
+            }
+          }
         }),
-        prisma.creditTransaction.count({
-          where: { userId }
+        prisma.creditTransaction.count({ where }),
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { credits: true }
         })
       ]);
 
+      // Calculate running balance for each transaction
+      let runningBalance = currentBalance?.credits || 0;
+      const transactionsWithBalance = transactions.map(transaction => {
+        const balanceAfter = runningBalance;
+        runningBalance -= transaction.amount;
+        return {
+          ...transaction,
+          balanceAfter,
+          balanceBefore: runningBalance
+        };
+      }).reverse();
+
+      // Get additional details for USAGE transactions
+      const enhancedTransactions = await Promise.all(
+        transactionsWithBalance.reverse().map(async (transaction) => {
+          let additionalInfo = {};
+
+          if (transaction.type === 'USAGE' && transaction.referenceId) {
+            // Try to get job details
+            const job = await prisma.processingJob.findUnique({
+              where: { id: transaction.referenceId },
+              select: {
+                id: true,
+                status: true,
+                outputCount: true,
+                project: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            });
+            if (job) {
+              additionalInfo = {
+                jobId: job.id,
+                jobStatus: job.status,
+                projectId: job.project.id,
+                projectName: job.project.name,
+                outputCount: job.outputCount
+              };
+            }
+          } else if (transaction.type === 'REFUND' && transaction.referenceId) {
+            // Get failed job details
+            const job = await prisma.processingJob.findUnique({
+              where: { id: transaction.referenceId },
+              select: {
+                id: true,
+                errorMessage: true,
+                project: {
+                  select: {
+                    name: true
+                  }
+                }
+              }
+            });
+            if (job) {
+              additionalInfo = {
+                jobId: job.id,
+                projectName: job.project.name,
+                failureReason: job.errorMessage
+              };
+            }
+          }
+
+          return {
+            ...transaction,
+            ...additionalInfo
+          };
+        })
+      );
+
       const pagination = createPagination(pageNum, limitNum, total);
 
-      ResponseHelper.success(res, transactions, 'Transactions retrieved successfully', 200, pagination);
+      ResponseHelper.success(res, enhancedTransactions, 'Transactions retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get transactions error:', error);
       ResponseHelper.serverError(res, 'Failed to get transactions');

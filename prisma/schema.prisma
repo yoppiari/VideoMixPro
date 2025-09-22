@@ -119,6 +119,7 @@ model CreditTransaction {
   amount      Int
   type        String
   description String
+  referenceId String?  @map("reference_id")
   paymentId   String?  @map("payment_id")
   createdAt   DateTime @default(now()) @map("created_at")
   payment     Payment? @relation(fields: [paymentId], references: [id])

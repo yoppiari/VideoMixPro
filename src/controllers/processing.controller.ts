@@ -168,16 +168,6 @@ export class ProcessingController {
           data: { credits: { decrement: creditsRequired } }
         });
 
-        // Record transaction with correct amount
-        await tx.creditTransaction.create({
-          data: {
-            userId,
-            amount: -creditsRequired,
-            type: TransactionType.USAGE,
-            description: `Video processing for project: ${project.name} (${outputCount} videos)`
-          }
-        });
-
         // Update project status
         await tx.project.update({
           where: { id: projectId },
@@ -185,7 +175,7 @@ export class ProcessingController {
         });
 
         // Create job with credits tracking and settings
-        return tx.processingJob.create({
+        const newJob = await tx.processingJob.create({
           data: {
             projectId,
             status: JobStatus.PENDING,
@@ -194,6 +184,19 @@ export class ProcessingController {
             settings: JSON.stringify(processingSettings) // Store settings for reference
           }
         });
+
+        // Record transaction with job reference
+        await tx.creditTransaction.create({
+          data: {
+            userId,
+            amount: -creditsRequired,
+            type: TransactionType.USAGE,
+            description: `Video processing for project: ${project.name} (${outputCount} videos)`,
+            referenceId: newJob.id // Link to the processing job
+          }
+        });
+
+        return newJob;
       });
 
       // Queue the processing job with the same settings used for credit calculation

@@ -1770,7 +1770,8 @@ export class VideoProcessingService {
             userId: job.project.userId,
             amount: job.creditsUsed,
             type: TransactionType.REFUND,
-            description: `Refund for failed processing job: ${job.project.name}`
+            description: `Refund for failed processing job: ${job.project.name}`,
+            referenceId: jobId // Link to the failed job
           }
         });
 

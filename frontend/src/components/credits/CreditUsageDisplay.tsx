@@ -8,10 +8,24 @@ interface CreditTransaction {
   id: string;
   type: 'PURCHASE' | 'USAGE' | 'REFUND' | 'BONUS';
   amount: number;
-  balance: number;
+  balance?: number;
+  balanceAfter?: number;
+  balanceBefore?: number;
   description: string;
   referenceId?: string;
   createdAt: string;
+  // Additional fields for enhanced transactions
+  projectId?: string;
+  projectName?: string;
+  jobId?: string;
+  jobStatus?: string;
+  outputCount?: number;
+  failureReason?: string;
+  payment?: {
+    receiptNumber?: string;
+    paymentMethod?: string;
+    status?: string;
+  };
 }
 
 interface CreditPackage {
@@ -37,7 +51,10 @@ const CreditUsageDisplay: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'balance' | 'history' | 'purchase' | 'usage'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'history' | 'purchase' | 'usage'>('usage');
+  const [transactionFilter, setTransactionFilter] = useState<string>('ALL');
+  const [dateRange, setDateRange] = useState<{start: string | null, end: string | null}>({start: null, end: null});
+  const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
   // Credit packages available for purchase
@@ -63,9 +80,12 @@ const CreditUsageDisplay: React.FC = () => {
       });
       setCredits(userRes.data.data.credits || 0);
 
-      // Fetch transaction history
+      // Fetch transaction history with enhanced details
       try {
-        const transRes = await axios.get('http://localhost:3002/api/v1/users/transactions', {
+        const params = new URLSearchParams();
+        params.append('limit', '50');
+
+        const transRes = await axios.get(`http://localhost:3002/api/v1/users/transactions?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setTransactions(transRes.data.data || []);
@@ -360,81 +380,230 @@ const CreditUsageDisplay: React.FC = () => {
             </div>
           )}
 
-          {/* Usage Analytics Tab */}
+          {/* Usage Analytics Tab - Detailed Transaction History */}
           {activeTab === 'usage' && (
-            <div className="bg-white rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Credit Usage Summary</h3>
+            <div>
+              {/* Filters and Search */}
+              <div className="mb-6 flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    placeholder="Search projects or descriptions..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <select
+                  value={transactionFilter}
+                  onChange={(e) => setTransactionFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="ALL">All Transactions</option>
+                  <option value="USAGE">Usage Only</option>
+                  <option value="PURCHASE">Purchases</option>
+                  <option value="REFUND">Refunds</option>
+                </select>
+                <input
+                  type="date"
+                  value={dateRange.start || ''}
+                  onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="date"
+                  value={dateRange.end || ''}
+                  onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 px-4 bg-red-50 rounded-lg border border-red-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Total Credits Used</span>
+              {/* Summary Statistics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-red-600 font-medium">Total Spent</span>
+                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                    </svg>
                   </div>
-                  <span className="text-lg font-bold text-red-700">
-                    {usageStats?.totalCreditsUsed?.toLocaleString() || '0'}
-                  </span>
+                  <p className="text-2xl font-bold text-red-700 mt-1">
+                    {Math.abs(transactions.filter(t => t.type === 'USAGE').reduce((sum, t) => sum + (t.amount || 0), 0)).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">credits used</p>
                 </div>
 
-                <div className="flex items-center justify-between py-3 px-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Credits This Month</span>
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-600 font-medium">Total Refunded</span>
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
                   </div>
-                  <span className="text-lg font-bold text-blue-700">
-                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.3).toLocaleString()}
-                  </span>
+                  <p className="text-2xl font-bold text-green-700 mt-1">
+                    {transactions.filter(t => t.type === 'REFUND').reduce((sum, t) => sum + (t.amount || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">credits refunded</p>
                 </div>
 
-                <div className="flex items-center justify-between py-3 px-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Average per Video</span>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-600 font-medium">Jobs Processed</span>
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
                   </div>
-                  <span className="text-lg font-bold text-green-700">
-                    {usageStats?.averageCreditsPerVideo?.toFixed(1) || '0.0'}
-                  </span>
+                  <p className="text-2xl font-bold text-blue-700 mt-1">
+                    {transactions.filter(t => t.type === 'USAGE').length}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">total jobs</p>
                 </div>
 
-                <div className="flex items-center justify-between py-3 px-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Total Refunds</span>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-purple-600 font-medium">Current Balance</span>
+                    <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
-                  <span className="text-lg font-bold text-purple-700">
-                    {(transactions?.filter(t => t.type === 'REFUND')?.reduce((sum, t) => sum + t.amount, 0) || 0).toLocaleString()}
-                  </span>
+                  <p className="text-2xl font-bold text-purple-700 mt-1">
+                    {(credits || 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">credits available</p>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-gray-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Video Processing Usage</span>
+              {/* Transaction Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Project/Reference
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Balance
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {transactions
+                      .filter(t => {
+                        // Apply filters
+                        if (transactionFilter !== 'ALL' && t.type !== transactionFilter) return false;
+                        if (searchTerm) {
+                          const search = searchTerm.toLowerCase();
+                          return (
+                            t.description?.toLowerCase().includes(search) ||
+                            t.projectName?.toLowerCase().includes(search)
+                          );
+                        }
+                        return true;
+                      })
+                      .map((transaction, index) => (
+                        <tr key={transaction.id} className={`hover:bg-gray-50 ${
+                          transaction.type === 'REFUND' ? 'bg-green-50' :
+                          transaction.type === 'USAGE' ? 'bg-red-50' :
+                          'bg-white'
+                        }`}>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {new Date(transaction.createdAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              transaction.type === 'USAGE' ? 'bg-red-100 text-red-800' :
+                              transaction.type === 'REFUND' ? 'bg-green-100 text-green-800' :
+                              transaction.type === 'PURCHASE' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {transaction.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {transaction.description}
+                            {transaction.outputCount && (
+                              <span className="block text-xs text-gray-500">
+                                {transaction.outputCount} outputs generated
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {transaction.projectName && (
+                              <div>
+                                <span className="font-medium text-gray-900">{transaction.projectName}</span>
+                                {transaction.jobId && (
+                                  <span className="block text-xs text-gray-500">Job: {transaction.jobId.slice(0, 8)}...</span>
+                                )}
+                              </div>
+                            )}
+                            {transaction.failureReason && (
+                              <span className="text-xs text-red-600">{transaction.failureReason}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {transaction.jobStatus && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                transaction.jobStatus === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                transaction.jobStatus === 'FAILED' ? 'bg-red-100 text-red-800' :
+                                transaction.jobStatus === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {transaction.jobStatus}
+                              </span>
+                            )}
+                            {transaction.type === 'REFUND' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                REFUNDED
+                              </span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 text-sm font-medium text-right ${
+                            transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {transaction.amount > 0 ? '+' : ''}{Math.abs(transaction.amount).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 text-right">
+                            {(transaction.balanceAfter || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                {transactions.filter(t => {
+                  if (transactionFilter !== 'ALL' && t.type !== transactionFilter) return false;
+                  if (searchTerm) {
+                    const search = searchTerm.toLowerCase();
+                    return (
+                      t.description?.toLowerCase().includes(search) ||
+                      t.projectName?.toLowerCase().includes(search)
+                    );
+                  }
+                  return true;
+                }).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No transactions found
                   </div>
-                  <span className="text-lg font-bold text-gray-700">
-                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.8).toLocaleString()}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between py-3 px-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Storage & Uploads</span>
-                  </div>
-                  <span className="text-lg font-bold text-orange-700">
-                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.15).toLocaleString()}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between py-3 px-4 bg-indigo-50 rounded-lg border border-indigo-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-indigo-500 rounded-full mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">Premium Features</span>
-                  </div>
-                  <span className="text-lg font-bold text-indigo-700">
-                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.05).toLocaleString()}
-                  </span>
-                </div>
+                )}
               </div>
             </div>
           )}

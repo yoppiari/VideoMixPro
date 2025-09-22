@@ -275,9 +275,44 @@ npx kill-port 3002           # Restart backend
 npx kill-port 3000           # Restart frontend
 ```
 
+## 💳 Credits Transaction History (Implemented 2025-09-22)
+
+### New Features Added:
+1. **Enhanced Transaction Tracking**:
+   - Added `referenceId` field to link transactions with processing jobs
+   - Full traceability of credit usage per job
+   - Automatic refund tracking for failed jobs
+
+2. **Detailed Transaction History Display**:
+   - Complete replacement of Usage Analytics tab
+   - Shows date, type, description, project/job reference
+   - Job status indicators (COMPLETED/FAILED/PROCESSING)
+   - Running balance calculations
+   - Color-coded rows (red for usage, green for refunds)
+
+3. **Advanced Filtering & Search**:
+   - Search by project name or description
+   - Filter by transaction type (USAGE/REFUND/PURCHASE)
+   - Date range selection
+   - Summary statistics cards
+
+4. **Backend Enhancements**:
+   - Enhanced `/api/v1/users/transactions` endpoint
+   - Includes job details, project names, failure reasons
+   - Balance calculations and pagination support
+
+### Files Modified:
+- `prisma/schema.prisma` - Added referenceId field to CreditTransaction
+- `src/controllers/user.controller.ts` - Enhanced transaction endpoint with details
+- `src/controllers/processing.controller.ts` - Link job ID to credit transactions
+- `src/services/video-processing.service.ts` - Include job ID in refund transactions
+- `frontend/src/components/credits/CreditUsageDisplay.tsx` - Complete UI overhaul
+
 ---
-Last Updated: 2025-09-22 21:00 WIB
-Status: ✅ MAJOR FIXES COMPLETED - Video processing fully operational
+Last Updated: 2025-09-22 22:10 WIB
+Status: ✅ ALL SYSTEMS OPERATIONAL
+- Video processing fully functional
+- Credits transaction history implemented
 - All hardcoded components removed
 - Dynamic FFmpeg filter generation working
 - Support for any video count (1+)
