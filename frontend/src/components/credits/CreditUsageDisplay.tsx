@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import DashboardLayout from '../layout/DashboardLayout';
 
 interface CreditTransaction {
   id: string;
@@ -168,7 +169,8 @@ const CreditUsageDisplay: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <DashboardLayout>
+      <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between">
@@ -465,7 +467,8 @@ const CreditUsageDisplay: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
