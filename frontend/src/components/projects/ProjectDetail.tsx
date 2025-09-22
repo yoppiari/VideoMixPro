@@ -204,8 +204,40 @@ const ProjectDetail: React.FC = () => {
   };
 
   const handleStartProcessing = async () => {
+    console.log('[ProjectDetail] Starting processing with settings:', mixingSettings);
+
     if (!mixingSettings) {
       alert('Please configure processing settings first');
+      return;
+    }
+
+    // Enhanced settings validation
+    const isValidSettings = (settings: any): boolean => {
+      if (!settings || typeof settings !== 'object') {
+        console.error('[ProjectDetail] Invalid settings object:', settings);
+        return false;
+      }
+
+      // Check for required boolean fields
+      const requiredBooleans = ['orderMixing', 'speedMixing', 'differentStartingVideo', 'groupMixing'];
+      for (const field of requiredBooleans) {
+        if (typeof settings[field] !== 'boolean') {
+          console.error(`[ProjectDetail] Invalid ${field}:`, settings[field]);
+          return false;
+        }
+      }
+
+      // Check output count
+      if (!settings.outputCount || settings.outputCount < 1) {
+        console.error('[ProjectDetail] Invalid outputCount:', settings.outputCount);
+        return false;
+      }
+
+      return true;
+    };
+
+    if (!isValidSettings(mixingSettings)) {
+      alert('Invalid processing settings detected. Please refresh the page and try again.');
       return;
     }
 
@@ -213,6 +245,17 @@ const ProjectDetail: React.FC = () => {
       alert('Minimum 2 videos required for mixing');
       return;
     }
+
+    // Log settings summary for debugging
+    console.log('[ProjectDetail] Processing settings summary:', {
+      orderMixing: mixingSettings.orderMixing,
+      speedMixing: mixingSettings.speedMixing,
+      differentStartingVideo: mixingSettings.differentStartingVideo,
+      groupMixing: mixingSettings.groupMixing,
+      outputCount: mixingSettings.outputCount,
+      aspectRatio: mixingSettings.aspectRatio,
+      resolution: mixingSettings.resolution
+    });
 
     try {
       const response = await apiClient.startProcessing(id!, mixingSettings);

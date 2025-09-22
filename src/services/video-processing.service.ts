@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import path from 'path';
 import fs from 'fs/promises';
-import { database, prisma, JobStatus, ProjectStatus } from '@/utils/database';
+import { database, prisma, JobStatus, ProjectStatus, TransactionType } from '@/utils/database';
 import { MixingMode, VideoFormat, VideoQuality } from '@/types';
 import logger from '@/utils/logger';
 import { promisify } from 'util';
@@ -531,6 +531,14 @@ export class VideoProcessingService {
         settings
       });
 
+      // CRITICAL FIX: Pre-generate all variants for "Different Starting Video" feature
+      let preGeneratedVariants: any[] | null = null;
+      if (settings.differentStartingVideo && !settings.groupMixing) {
+        logger.info(`[Pre-Generation] Generating all variants upfront for Different Starting Video feature`);
+        preGeneratedVariants = await this.preGenerateVariants(project, settings, data.outputCount);
+        logger.info(`[Pre-Generation] Generated ${preGeneratedVariants.length} variants for ${data.outputCount} outputs`);
+      }
+
       for (let i = 0; i < data.outputCount; i++) {
         // Check if job was cancelled - check both memory and database
         const jobStatus = await prisma.processingJob.findUnique({
@@ -573,7 +581,7 @@ export class VideoProcessingService {
             progress + 5,
             `Analyzing content for intelligent auto-mixing (${currentOutput}/${data.outputCount})`
           );
-          outputPath = await this.processAutoMixing(project, settings, i);
+          outputPath = await this.processAutoMixing(project, settings, i, preGeneratedVariants);
         } else {
           await this.updateJobStatusWithDetails(
             jobId,
@@ -615,12 +623,20 @@ export class VideoProcessingService {
       const errorObj = error as any;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
-      // Log detailed error information
-      logger.error(`Job ${jobId} failed:`, {
-        message: errorMessage,
+      // Enhanced error logging with more context
+      logger.error(`Job ${jobId} failed with detailed context:`, {
+        jobId,
+        projectId: data.projectId,
+        errorMessage,
+        errorType: error?.constructor?.name || 'Unknown',
         stack: error instanceof Error ? error.stack : undefined,
         ffmpegExitCode: errorObj.ffmpegExitCode,
-        ffmpegStderr: errorObj.ffmpegStderr ? errorObj.ffmpegStderr.slice(-500) : undefined
+        ffmpegStderr: errorObj.ffmpegStderr ? errorObj.ffmpegStderr.slice(-1000) : undefined,
+        settings: data.settings,
+        outputCount: data.outputCount,
+        timestamp: new Date().toISOString(),
+        processMemory: process.memoryUsage(),
+        nodeVersion: process.version
       });
 
       // Try to schedule retry before marking as failed
@@ -686,7 +702,79 @@ export class VideoProcessingService {
     }
   }
 
-  private async processAutoMixing(project: any, settings: any, index: number): Promise<string> {
+  private async preGenerateVariants(project: any, settings: any, outputCount: number): Promise<any[]> {
+    const videoFiles = project.videoFiles;
+
+    // Convert video files to VideoClip format for auto-mixing service
+    const clips: VideoClip[] = videoFiles.map((file: any) => ({
+      id: file.id,
+      path: file.path,
+      duration: file.duration || 30,
+      metadata: {
+        resolution: file.resolution,
+        format: file.format,
+        bitrate: file.metadata?.bitrate
+      },
+      originalName: file.originalName,
+      groupId: file.groupId
+    }));
+
+    // Sanitize settings (same as in processAutoMixing)
+    const sanitizedSettings = {
+      // Core mixing options
+      orderMixing: Boolean(settings.orderMixing),
+      speedMixing: Boolean(settings.speedMixing),
+      differentStartingVideo: Boolean(settings.differentStartingVideo),
+      groupMixing: Boolean(settings.groupMixing),
+
+      // Speed settings with validation
+      speedRange: settings.speedRange || { min: 0.5, max: 2 },
+      allowedSpeeds: Array.isArray(settings.allowedSpeeds) ? settings.allowedSpeeds : [0.5, 0.75, 1, 1.25, 1.5, 2],
+
+      // Group mixing settings
+      groupMixingMode: settings.groupMixingMode === 'random' ? 'random' : 'strict',
+
+      // Removed features - force to safe defaults
+      transitionMixing: false,
+      transitionTypes: [],
+      transitionDuration: { min: 0, max: 0 },
+      colorVariations: false,
+      colorIntensity: 'low' as const,
+
+      // Quality settings with validation
+      metadataSource: ['normal', 'capcut', 'vn', 'inshot'].includes(settings.metadataSource) ? settings.metadataSource : 'normal',
+      bitrate: ['low', 'medium', 'high'].includes(settings.bitrate) ? settings.bitrate : 'medium',
+      resolution: ['sd', 'hd', 'fullhd'].includes(settings.resolution) ? settings.resolution : 'hd',
+      frameRate: [24, 30, 60].includes(settings.frameRate) ? settings.frameRate : 30,
+
+      // Duration and audio settings
+      aspectRatio: settings.aspectRatio || 'original',
+      durationType: settings.durationType || 'original',
+      fixedDuration: typeof settings.fixedDuration === 'number' ? settings.fixedDuration : 30,
+      durationDistributionMode: settings.durationDistributionMode || 'proportional',
+      smartTrimming: Boolean(settings.smartTrimming),
+      audioMode: settings.audioMode === 'mute' ? 'mute' : 'keep',
+
+      // Output count with validation
+      outputCount: Math.max(1, Math.min(100, Number(outputCount) || 5))
+    };
+
+    // Map sanitized settings to auto-mixing service format
+    const mixingSettings = {
+      ...sanitizedSettings,
+      bitrate: this.mapQualityToBitrate(sanitizedSettings.bitrate),
+      resolution: this.mapQualityToResolution(sanitizedSettings.resolution)
+    };
+
+    // Generate ALL variants at once
+    const variants = await this.autoMixingService.generateVariants(clips, mixingSettings);
+
+    logger.info(`[Pre-Generation] Generated ${variants.length} total variants for Different Starting Video selection`);
+
+    return variants;
+  }
+
+  private async processAutoMixing(project: any, settings: any, index: number, preGeneratedVariants?: any[]): Promise<string> {
     const videoFiles = project.videoFiles;
 
     // Enhanced logging for debugging
@@ -722,48 +810,61 @@ export class VideoProcessingService {
 
     logger.info(`[Auto-Mixing] Converted ${videoFiles.length} video files to ${clips.length} clips for processing`);
 
-    // Map VideoMixingOptions to MixingSettings for auto-mixing service
-    const mixingSettings = {
-      // Mixing Options
-      orderMixing: settings.orderMixing !== false,
-      speedMixing: settings.speedVariations === true,
-      differentStartingVideo: settings.differentStartingVideo === true,
+    // Validate and sanitize settings with fallbacks for removed properties
+    const sanitizedSettings = {
+      // Core mixing options
+      orderMixing: Boolean(settings.orderMixing),
+      speedMixing: Boolean(settings.speedMixing),
+      differentStartingVideo: Boolean(settings.differentStartingVideo),
+      groupMixing: Boolean(settings.groupMixing),
+
+      // Speed settings with validation
       speedRange: settings.speedRange || { min: 0.5, max: 2 },
-      allowedSpeeds: settings.allowedSpeeds || [0.5, 0.75, 1, 1.25, 1.5, 2],
+      allowedSpeeds: Array.isArray(settings.allowedSpeeds) ? settings.allowedSpeeds : [0.5, 0.75, 1, 1.25, 1.5, 2],
 
-      // Group Mixing
-      groupMixing: settings.groupMixing === true,
-      groupMixingMode: settings.groupMixingMode || 'strict',
+      // Group mixing settings
+      groupMixingMode: settings.groupMixingMode === 'random' ? 'random' : 'strict',
 
-      // Transition Variations
-      transitionMixing: settings.transitionVariations === true,
-      transitionTypes: settings.transitionTypes || ['fade', 'dissolve', 'wipe', 'slide'],
-      transitionDuration: settings.transitionDuration || { min: 0.2, max: 0.5 },
+      // Removed features - force to safe defaults
+      transitionMixing: false,
+      transitionTypes: [],
+      transitionDuration: { min: 0, max: 0 },
+      colorVariations: false,
+      colorIntensity: 'low' as const,
 
-      // Color Variations
-      colorVariations: settings.colorVariations === true,
-      colorIntensity: settings.colorIntensity || 'low',
+      // Quality settings with validation
+      metadataSource: ['normal', 'capcut', 'vn', 'inshot'].includes(settings.metadataSource) ? settings.metadataSource : 'normal',
+      bitrate: ['low', 'medium', 'high'].includes(settings.bitrate) ? settings.bitrate : 'medium',
+      resolution: ['sd', 'hd', 'fullhd'].includes(settings.resolution) ? settings.resolution : 'hd',
+      frameRate: [24, 30, 60].includes(settings.frameRate) ? settings.frameRate : 30,
 
-      // Video Quality - Map from VideoMixingOptions format
-      metadataSource: settings.metadataSource || 'normal',
-      bitrate: this.mapQualityToBitrate(settings.quality),
-      resolution: this.mapQualityToResolution(settings.quality),
-      frameRate: settings.frameRate || 30,
-
-      // Aspect Ratio
+      // Duration and audio settings
       aspectRatio: settings.aspectRatio || 'original',
-
-      // Duration
       durationType: settings.durationType || 'original',
-      fixedDuration: settings.fixedDuration || 30,
-      smartTrimming: settings.smartTrimming === true, // CRITICAL: Pass smart trimming setting
-      durationDistributionMode: settings.durationDistributionMode || 'proportional', // CRITICAL: Pass distribution mode
+      fixedDuration: typeof settings.fixedDuration === 'number' ? settings.fixedDuration : 30,
+      durationDistributionMode: settings.durationDistributionMode || 'proportional',
+      smartTrimming: Boolean(settings.smartTrimming),
+      audioMode: settings.audioMode === 'mute' ? 'mute' : 'keep',
 
-      // Audio
-      audioMode: settings.audioMode || 'keep',
+      // Output count with validation
+      outputCount: Math.max(1, Math.min(100, Number(settings.outputCount) || 5))
+    };
 
-      // Output
-      outputCount: settings.outputCount || 1
+    // Log sanitized settings for debugging
+    logger.info('[ProcessAutoMixing] Sanitized settings:', {
+      original: settings,
+      sanitized: sanitizedSettings,
+      note: 'Transition and color features disabled for stability'
+    });
+
+    // Map sanitized settings to auto-mixing service format
+    const mixingSettings = {
+      // Use sanitized settings for safety
+      ...sanitizedSettings,
+
+      // Override specific mappings for compatibility
+      bitrate: this.mapQualityToBitrate(sanitizedSettings.bitrate),
+      resolution: this.mapQualityToResolution(sanitizedSettings.resolution)
     };
 
     // Log complete settings for debugging
@@ -798,11 +899,17 @@ export class VideoProcessingService {
       groups = groups.filter((group: any) => group.videos.length > 0);
     }
 
-    // Generate variants based on new mixing settings
-    logger.info(`[Auto-Mixing] Generating variants with ${clips.length} clips`);
-    const variants = await this.autoMixingService.generateVariants(clips, mixingSettings, groups);
-
-    logger.info(`[Auto-Mixing] Generated ${variants.length} variants`);
+    // Use pre-generated variants if available (for Different Starting Video feature)
+    let variants;
+    if (preGeneratedVariants) {
+      logger.info(`[Auto-Mixing] Using pre-generated variants for Different Starting Video (${preGeneratedVariants.length} available)`);
+      variants = preGeneratedVariants;
+    } else {
+      // Generate variants based on new mixing settings (fallback)
+      logger.info(`[Auto-Mixing] Generating variants with ${clips.length} clips`);
+      variants = await this.autoMixingService.generateVariants(clips, mixingSettings, groups);
+      logger.info(`[Auto-Mixing] Generated ${variants.length} variants`);
+    }
 
     if (index >= variants.length) {
       throw new Error(`Not enough variants generated. Requested: ${index + 1}, Available: ${variants.length}`);
@@ -1492,7 +1599,7 @@ export class VideoProcessingService {
       }
 
       // Start transaction to refund credits
-      await database.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx) => {
         // Add credits back to user
         await tx.user.update({
           where: { id: job.project.userId },

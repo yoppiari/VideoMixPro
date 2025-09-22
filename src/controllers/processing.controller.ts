@@ -54,9 +54,76 @@ export class ProcessingController {
         return;
       }
 
-      // Use mixing settings from request if provided, otherwise use project settings
-      const processingSettings = mixingSettings || (project.settings as any);
-      const outputCount = processingSettings.outputCount || 1;
+      // Validate and sanitize mixing settings
+      if (!mixingSettings) {
+        ResponseHelper.error(res, 'Processing settings are required', 400);
+        return;
+      }
+
+      // Validate required fields and types
+      if (typeof mixingSettings !== 'object') {
+        ResponseHelper.error(res, 'Settings must be an object', 400);
+        return;
+      }
+
+      // Validate output count
+      const outputCount = Math.max(1, Math.min(100, Number(mixingSettings.outputCount) || 1));
+      if (isNaN(outputCount)) {
+        ResponseHelper.error(res, 'Output count must be a valid number', 400);
+        return;
+      }
+
+      // Sanitize settings with safe defaults (removing problematic properties)
+      const processingSettings = {
+        // Core mixing options with validation
+        orderMixing: Boolean(mixingSettings.orderMixing),
+        speedMixing: Boolean(mixingSettings.speedMixing),
+        differentStartingVideo: Boolean(mixingSettings.differentStartingVideo),
+        groupMixing: Boolean(mixingSettings.groupMixing),
+
+        // Speed settings with validation
+        speedRange: (mixingSettings.speedRange && typeof mixingSettings.speedRange === 'object')
+          ? mixingSettings.speedRange
+          : { min: 0.5, max: 2 },
+        allowedSpeeds: Array.isArray(mixingSettings.allowedSpeeds)
+          ? mixingSettings.allowedSpeeds.filter(s => typeof s === 'number' && s > 0)
+          : [0.5, 0.75, 1, 1.25, 1.5, 2],
+
+        // Quality settings with validation
+        metadataSource: ['normal', 'capcut', 'vn', 'inshot'].includes(mixingSettings.metadataSource)
+          ? mixingSettings.metadataSource
+          : 'normal',
+        bitrate: ['low', 'medium', 'high'].includes(mixingSettings.bitrate)
+          ? mixingSettings.bitrate
+          : 'medium',
+        resolution: ['sd', 'hd', 'fullhd'].includes(mixingSettings.resolution)
+          ? mixingSettings.resolution
+          : 'hd',
+        frameRate: [24, 30, 60].includes(Number(mixingSettings.frameRate))
+          ? Number(mixingSettings.frameRate)
+          : 30,
+
+        // Duration and other settings
+        aspectRatio: mixingSettings.aspectRatio || 'original',
+        durationType: ['original', 'fixed'].includes(mixingSettings.durationType)
+          ? mixingSettings.durationType
+          : 'original',
+        fixedDuration: typeof mixingSettings.fixedDuration === 'number' && mixingSettings.fixedDuration > 0
+          ? Math.min(600, Math.max(5, mixingSettings.fixedDuration))
+          : 30,
+        smartTrimming: Boolean(mixingSettings.smartTrimming),
+        durationDistributionMode: ['proportional', 'equal', 'weighted'].includes(mixingSettings.durationDistributionMode)
+          ? mixingSettings.durationDistributionMode
+          : 'proportional',
+        audioMode: mixingSettings.audioMode === 'mute' ? 'mute' : 'keep',
+
+        // Force removed features to safe defaults
+        transitionMixing: false,
+        colorVariations: false,
+
+        // Validated output count
+        outputCount
+      };
 
       // Log settings for debugging and validation
       logger.info('[Settings Received] Processing controller received settings:', JSON.stringify({
@@ -244,7 +311,19 @@ export class ProcessingController {
         orderBy: { createdAt: 'desc' }
       });
 
-      ResponseHelper.success(res, jobs);
+      // Parse settings for each job
+      const jobsWithParsedSettings = jobs.map(job => ({
+        ...job,
+        settings: job.settings ? (() => {
+          try {
+            return JSON.parse(job.settings);
+          } catch {
+            return {};
+          }
+        })() : {}
+      }));
+
+      ResponseHelper.success(res, jobsWithParsedSettings);
     } catch (error) {
       logger.error('Get project jobs error:', error);
       ResponseHelper.serverError(res, 'Failed to get project jobs');
@@ -288,9 +367,21 @@ export class ProcessingController {
         })
       ]);
 
+      // Parse settings for each job
+      const jobsWithParsedSettings = jobs.map(job => ({
+        ...job,
+        settings: job.settings ? (() => {
+          try {
+            return JSON.parse(job.settings);
+          } catch {
+            return {};
+          }
+        })() : {}
+      }));
+
       const pagination = createPagination(pageNum, limitNum, total);
 
-      ResponseHelper.success(res, jobs, 'Jobs retrieved successfully', 200, pagination);
+      ResponseHelper.success(res, jobsWithParsedSettings, 'Jobs retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get user jobs error:', error);
       ResponseHelper.serverError(res, 'Failed to get jobs');

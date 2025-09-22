@@ -76,7 +76,10 @@
       "Bash(ffprobe:*)",
       "Bash(set DEBUG_MIXING=true)",
       "Bash(del \"frontend\\nul\")",
-      "Bash(del \"frontend\\src\\services\\nul\")"
+      "Bash(del \"frontend\\src\\services\\nul\")",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -i uploads1758330314330_video_test_mix_2_.mp4 -i uploads1758330315645_video_test_mix.mp4 -filter_complex \"[0:v]trim=0:2,setpts=PTS-STARTPTS[v0];[1:v]trim=0:2,setpts=PTS-STARTPTS[v1];[v0][v1]xfade=offset=1.5:duration=0.5:transition=fade[outv]\" -map \"[outv]\" -t 3 -y test_xfade.mp4)",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -i uploads1758330314330_video_test_mix_2_.mp4 -i uploads1758330315645_video_test_mix.mp4 -filter_complex \"[0:v]trim=0:2,setpts=PTS-STARTPTS,fps=30[v0];[1:v]trim=0:2,setpts=PTS-STARTPTS,fps=30[v1];[v0][v1]xfade=offset=1.5:duration=0.5:transition=fade[outv]\" -map \"[outv]\" -t 3 -y test_xfade.mp4)",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -i uploads1758330314330_video_test_mix_2_.mp4 -i uploads1758330315645_video_test_mix.mp4 -filter_complex \"[0:v]trim=0:2,setpts=PTS-STARTPTS,fps=30,setpts=2*PTS,fps=30[v0];[1:v]trim=0:2,setpts=PTS-STARTPTS,fps=30,setpts=2*PTS,fps=30[v1];[v0][v1]xfade=offset=3.5:duration=0.5:transition=fade[outv]\" -map \"[outv]\" -t 7 -y test_xfade_with_speed.mp4)"
     ],
     "deny": [],
     "ask": []

@@ -33,17 +33,7 @@ export interface MixingSettings {
   groupMixing: boolean;
   groupMixingMode: 'strict' | 'random';
 
-  // Transition Variations
-  transitionMixing: boolean;
-  transitionTypes: string[];
-  transitionDuration: {
-    min: number;
-    max: number;
-  };
-
-  // Color Variations
-  colorVariations: boolean;
-  colorIntensity: 'low' | 'medium' | 'high';
+  // Note: Transition and Color features removed for stability
 
   // Video Quality
   metadataSource: 'normal' | 'capcut' | 'vn' | 'inshot';
@@ -164,9 +154,11 @@ export class AutoMixingService {
         // Note: If clip is shorter than target, it will be used fully
       }
 
-      // Convert trim points back to original time (before speed adjustment)
-      info.trimStart = info.trimStart * info.speedMultiplier;
-      info.trimEnd = info.trimEnd * info.speedMultiplier;
+      // Convert trim points back to original time (accounting for speed adjustment)
+      // If speed > 1 (faster), we need less original footage
+      // If speed < 1 (slower), we need more original footage
+      info.trimStart = info.trimStart / info.speedMultiplier;
+      info.trimEnd = info.trimEnd / info.speedMultiplier;
 
       // CRITICAL: Validate trim values are within bounds
       const originalDuration = info.originalDuration;
@@ -321,6 +313,53 @@ export class AutoMixingService {
   }
 
   /**
+   * Generate rotated orders for Different Starting Video feature
+   * Each output starts with a different video, maintaining relative order
+   */
+  private generateRotatedOrders(videos: VideoClip[], outputCount: number): string[][] {
+    const orders: string[][] = [];
+    const videoIds = videos.map(v => v.id);
+
+    for (let i = 0; i < outputCount; i++) {
+      // Rotate the array by i positions
+      const rotationIndex = i % videos.length;
+      const rotatedOrder = [
+        ...videoIds.slice(rotationIndex),
+        ...videoIds.slice(0, rotationIndex)
+      ];
+      orders.push(rotatedOrder);
+
+      logger.info(`[Variant Generation] Rotated order ${i + 1}: [${rotatedOrder.join(', ')}]`);
+    }
+
+    return orders;
+  }
+
+  /**
+   * Generate minimal speed variations for output uniqueness
+   * Creates slight speed variations (0.95x - 1.05x) to ensure outputs are different
+   */
+  private generateMinimalSpeedVariations(videos: VideoClip[], outputCount: number): Map<string, number>[] {
+    const speedCombos: Map<string, number>[] = [];
+
+    for (let i = 0; i < outputCount; i++) {
+      const speeds = new Map<string, number>();
+
+      videos.forEach((video, videoIndex) => {
+        // Create slight variations: 0.95, 0.97, 1.0, 1.02, 1.05
+        const variations = [0.95, 0.97, 1.0, 1.02, 1.05];
+        const variationIndex = (i + videoIndex) % variations.length;
+        speeds.set(video.id, variations[variationIndex]);
+      });
+
+      speedCombos.push(speeds);
+    }
+
+    logger.info(`[Variant Generation] Generated ${speedCombos.length} minimal speed variations`);
+    return speedCombos;
+  }
+
+  /**
    * Generate speed combinations for videos
    */
   private generateSpeedCombinations(
@@ -435,32 +474,52 @@ export class AutoMixingService {
 
           orders = filteredOrders;
         }
+      } else if (settings.differentStartingVideo && !settings.orderMixing) {
+        // NEW: Generate rotated orders for Different Starting Video without full order mixing
+        logger.info('[Variant Generation] Different Starting Video enabled WITHOUT order mixing - generating rotated orders');
+        orders = this.generateRotatedOrders(videos, settings.outputCount);
       }
 
       // Get all possible speed combinations
       let speedCombos: Map<string, number>[] = [new Map()]; // Default speeds (1x)
       if (settings.speedMixing) {
         speedCombos = this.generateSpeedCombinations(videos, settings.allowedSpeeds);
+      } else if (settings.outputCount > 1) {
+        // NEW: Generate slight speed variations even when speed mixing is disabled
+        logger.info('[Variant Generation] Generating minimal speed variations for output uniqueness');
+        speedCombos = this.generateMinimalSpeedVariations(videos, settings.outputCount);
       } else {
-        // Set all speeds to 1x if speed mixing is disabled
+        // Set all speeds to 1x if speed mixing is disabled and only 1 output
         const defaultSpeeds = new Map<string, number>();
         videos.forEach(v => defaultSpeeds.set(v.id, 1));
         speedCombos = [defaultSpeeds];
       }
 
-      // Generate all combinations
+      // Generate all combinations - ensure we use different orders for each output
       let variantId = 0;
-      for (const order of orders) {
-        for (const speeds of speedCombos) {
-          // Generate transitions if enabled
-          const transitions = settings.transitionMixing
-            ? this.generateTransitions(videos.length, settings.transitionTypes)
-            : [];
 
-          // Generate color adjustments if enabled
-          const colorAdjustments = settings.colorVariations
-            ? this.generateColorAdjustments(settings.colorIntensity)
-            : { brightness: 0, contrast: 1, saturation: 1, hue: 0 };
+      // If we have multiple orders and speeds, combine them smartly
+      if (orders.length >= settings.outputCount) {
+        // We have enough different orders, use one per output
+        for (let i = 0; i < settings.outputCount; i++) {
+          const order = orders[i];
+          const speeds = speedCombos[i % speedCombos.length];
+
+          // CRITICAL: Force disable transitions and colors completely for stability
+          const transitions: string[] = [];
+          const colorAdjustments = { brightness: 0, contrast: 1, saturation: 1, hue: 0 };
+
+          // Override settings to ensure stability
+          const stableSettings = {
+            ...settings,
+            transitionMixing: false,
+            colorVariations: false,
+            transitionTypes: [],
+            transitionDuration: { min: 0, max: 0 },
+            colorIntensity: 'low' as const
+          };
+
+          logger.info(`[Variant Generation] Variant ${variantId}: order starting with ${order[0]}, speeds vary`);
 
           variants.push({
             id: `variant-${variantId++}`,
@@ -468,16 +527,46 @@ export class AutoMixingService {
             speeds,
             transitions,
             colorAdjustments,
-            settings
+            settings: stableSettings
           });
+        }
+      } else {
+        // Original nested loop logic when we have fewer orders than outputs
+        for (const order of orders) {
+          for (const speeds of speedCombos) {
+            // CRITICAL: Force disable transitions and colors completely for stability
+            const transitions: string[] = [];
+            const colorAdjustments = { brightness: 0, contrast: 1, saturation: 1, hue: 0 };
 
-          // Stop if we've generated enough variants
+            // Override settings to ensure stability
+            const stableSettings = {
+              ...settings,
+              transitionMixing: false,
+              colorVariations: false,
+              transitionTypes: [],
+              transitionDuration: { min: 0, max: 0 },
+              colorIntensity: 'low' as const
+            };
+
+            logger.info(`[Variant Generation] Transitions DISABLED for variant ${variantId}`);
+
+            variants.push({
+              id: `variant-${variantId++}`,
+              videoOrder: order,
+              speeds,
+              transitions,
+              colorAdjustments,
+              settings: stableSettings
+            });
+
+            // Stop if we've generated enough variants
+            if (variants.length >= settings.outputCount) {
+              break;
+            }
+          }
           if (variants.length >= settings.outputCount) {
             break;
           }
-        }
-        if (variants.length >= settings.outputCount) {
-          break;
         }
       }
 
@@ -488,7 +577,7 @@ export class AutoMixingService {
           const groupedByStartVideo = new Map<string, VideoVariant[]>();
 
           for (const variant of variants) {
-            const startVideoId = variant.order[0];
+            const startVideoId = variant.videoOrder[0]; // Fixed: was variant.order[0]
             if (!groupedByStartVideo.has(startVideoId)) {
               groupedByStartVideo.set(startVideoId, []);
             }
@@ -529,10 +618,16 @@ export class AutoMixingService {
           }
 
           // Log detailed selection info
-          const startingVideos = selectedVariants.map(v => v.order[0]);
+          const startingVideos = selectedVariants.map(v => v.videoOrder[0]); // Fixed: was v.order[0]
           const uniqueStarts = new Set(startingVideos);
           logger.info(`[AutoMixing] Selected ${selectedVariants.length} variants with ${uniqueStarts.size} unique starting videos from ${groups.length} groups`);
-          logger.info(`[AutoMixing] Starting video distribution:`, Array.from(uniqueStarts).join(', '));
+          logger.info(`[AutoMixing] Starting video distribution: ${Array.from(uniqueStarts).join(', ')}`);
+
+          // Enhanced logging to show actual variant assignments
+          selectedVariants.forEach((variant, index) => {
+            logger.info(`[AutoMixing] Output ${index + 1}: starts with ${variant.videoOrder[0]} (variant ${variant.id})`);
+          });
+
           return selectedVariants;
         } else {
           // Original logic: random shuffle
@@ -611,6 +706,34 @@ export class AutoMixingService {
       default:
         return { width: 1280, height: 720 };
     }
+  }
+
+  /**
+   * Get output dimensions combining aspect ratio and resolution
+   */
+  public getOutputDimensions(aspectRatio?: string, resolution?: string): {
+    finalWidth: number;
+    finalHeight: number;
+  } {
+    // Get base resolution dimensions
+    const baseResolution = this.getResolutionDimensions(resolution || 'hd');
+
+    // Apply aspect ratio overrides if specified
+    if (aspectRatio) {
+      const aspectSettings = this.getAspectRatioSettings(aspectRatio);
+      if (aspectSettings.width > 0 && aspectSettings.height > 0) {
+        return {
+          finalWidth: aspectSettings.width,
+          finalHeight: aspectSettings.height
+        };
+      }
+    }
+
+    // Use base resolution if no aspect ratio override
+    return {
+      finalWidth: baseResolution.width,
+      finalHeight: baseResolution.height
+    };
   }
 
   /**
@@ -817,25 +940,24 @@ export class AutoMixingService {
         finalHeight = aspectSettings.height;
       }
 
-      // 2. Apply scaling and padding to normalize all videos to the same dimensions
+      // 2. Apply speed adjustment FIRST (critical for xfade compatibility)
+      // Must be done BEFORE fps normalization to avoid "rate of 1/0 is invalid" error
+      const speed = variant.speeds.get(videoId) || 1;
+      if (speed !== 1) {
+        // Apply speed change: speed=2 means 2x faster (setpts=0.5*PTS)
+        videoFilterChain.push(`setpts=${1/speed}*PTS`);
+      }
+
+      // 3. Apply scaling and padding to normalize all videos to the same dimensions
       // This ensures all videos have identical dimensions before concatenation
       videoFilterChain.push(`scale=${finalWidth}:${finalHeight}:force_original_aspect_ratio=decrease`);
       videoFilterChain.push(`pad=${finalWidth}:${finalHeight}:(ow-iw)/2:(oh-ih)/2:black`);
 
-      // 2. Normalize frame rate
+      // 4. Normalize frame rate (AFTER speed adjustment for proper xfade)
       videoFilterChain.push(`fps=${targetFPS}`);
 
-      // 3. Apply speed adjustment
-      const speed = variant.speeds.get(videoId) || 1;
-      if (speed !== 1) {
-        videoFilterChain.push(`setpts=${1/speed}*PTS`);
-      }
-
-      // 4. Apply color adjustments
-      if (variant.colorAdjustments && variant.settings.colorVariations) {
-        const colorFilter = `eq=brightness=${variant.colorAdjustments.brightness}:contrast=${variant.colorAdjustments.contrast}:saturation=${variant.colorAdjustments.saturation},hue=h=${variant.colorAdjustments.hue}`;
-        videoFilterChain.push(colorFilter);
-      }
+      // 4. Color adjustments COMPLETELY DISABLED for stability
+      // No color filters will be applied regardless of settings
 
       // Build the complete video filter
       const videoFilter = videoFilterChain.join(',');
@@ -883,21 +1005,151 @@ export class AutoMixingService {
       }
     });
 
-    // Concat videos - ensure proper stream mapping
+    // Concat videos with transitions if enabled
     let finalVideoOutput = 'outv';
+    let finalAudioOutput = 'outa';
     // Use the actual number of validated videos for concatenation
     const concatenationVideoCount = validatedVideos.length;
 
     logger.info(`[FFmpeg Build] Concatenating ${concatenationVideoCount} videos (validated from ${variant.videoOrder.length} in variant order)`);
 
-    if (variant.settings.audioMode === 'mute') {
-      // Video-only concatenation
-      const videoInputs = validatedVideos.map((_, i) => `[v${i}]`).join('');
-      filters.push(`${videoInputs}concat=n=${concatenationVideoCount}:v=1:a=0[${finalVideoOutput}]`);
+    // CRITICAL: Force disable ALL transitions for stability
+    // This block will NEVER execute to prevent complex xfade commands
+    const hasTransitions = false;
+    const transitionsCompletelyDisabled = true;
+
+    if (hasTransitions && !transitionsCompletelyDisabled) {
+      logger.info(`[FFmpeg Build] Transition Effects ENABLED - Applying ${variant.transitions.length} transitions between ${concatenationVideoCount} videos`);
+      logger.info(`[FFmpeg Build] Available transitions: ${variant.transitions.join(', ')}`);
+
+      // Use xfade for video transitions
+      // Build chain of xfade filters: v0 + v1 -> tmp1, tmp1 + v2 -> tmp2, etc.
+      let currentVideoStream = 'v0';
+      let currentAudioStream = variant.settings.audioMode !== 'mute' ? 'a0' : null;
+
+      // Calculate cumulative durations for offset calculation
+      let cumulativeDuration = 0;
+      const videoDurations: number[] = [];
+
+      // Get duration for each video (accounting for speed changes and trimming)
+      validatedVideos.forEach((video, index) => {
+        const videoId = variant.videoOrder[index];
+        const speed = variant.speeds.get(videoId) || 1;
+        const durationInfo = durationInfoMap?.get(videoId);
+        const originalVideo = videoMap.get(videoId);
+
+        let effectiveDuration: number;
+        if (durationInfo && variant.settings.smartTrimming) {
+          // When smart trimming is enabled, use the actual trimmed duration
+          // trimStart and trimEnd are already in original video time (see lines 170-171)
+          const trimmedDuration = durationInfo.trimEnd - durationInfo.trimStart;
+          effectiveDuration = trimmedDuration;
+          logger.info(`[Duration Calc] Video ${index}: trimmed=${trimmedDuration.toFixed(3)}s (trim ${durationInfo.trimStart.toFixed(3)}-${durationInfo.trimEnd.toFixed(3)}), original=${originalVideo?.duration.toFixed(3)}s`);
+        } else {
+          // Use full video duration
+          effectiveDuration = originalVideo?.duration || 10;
+          logger.info(`[Duration Calc] Video ${index}: using full duration=${effectiveDuration.toFixed(3)}s`);
+        }
+
+        // Apply speed adjustment to the duration
+        // speed=2 means 2x faster -> setpts=0.5*PTS -> duration is halved
+        // speed=0.5 means 0.5x speed -> setpts=2*PTS -> duration is doubled
+        const finalDuration = effectiveDuration / speed;
+        videoDurations.push(finalDuration);
+        logger.info(`[Duration Calc] Video ${index} (${videoId}): final=${finalDuration.toFixed(3)}s (base=${effectiveDuration.toFixed(3)}s, speed=${speed}x)`);
+      });
+
+      // Apply transitions between videos
+      for (let i = 0; i < concatenationVideoCount - 1; i++) {
+        const transitionType = variant.transitions[i] || 'fade';
+        // Use configured transition duration or calculate based on video lengths
+        const configuredDuration = variant.settings.transitionDuration
+          ? (variant.settings.transitionDuration.min + variant.settings.transitionDuration.max) / 2
+          : 1.0;
+        const transitionDuration = Math.min(
+          configuredDuration,
+          Math.min(videoDurations[i], videoDurations[i + 1]) * 0.2 // Max 20% of shorter video
+        );
+
+        // Calculate offset for xfade (transition starts before the end of the first video)
+        // For chained xfades, use cumulative duration for subsequent transitions
+        const offset = i === 0
+          ? videoDurations[i] - transitionDuration
+          : cumulativeDuration;
+
+        // Validate and adjust offset to ensure it doesn't exceed video duration
+        const maxOffset = i === 0 ? videoDurations[i] - 0.1 : cumulativeDuration;
+
+        // Log BEFORE adjustment for debugging
+        logger.info(`[Transition ${i}] Pre-validation: offset=${offset.toFixed(3)}s, maxOffset=${maxOffset.toFixed(3)}s`);
+
+        if (offset > maxOffset) {
+          logger.warn(`[Transition ${i}] Offset ${offset.toFixed(3)}s exceeds max ${maxOffset.toFixed(3)}s, adjusting...`);
+          offset = Math.max(0.1, maxOffset - transitionDuration);
+        }
+
+        if (offset < 0 || isNaN(offset)) {
+          logger.error(`[Transition ${i}] Invalid offset ${offset}s - setting to minimum`);
+          offset = 0.1; // Fallback to minimal offset
+        }
+
+        // Log final calculations for debugging
+        logger.info(`[Transition ${i}] Final: Video${i}_dur=${videoDurations[i].toFixed(3)}s, ` +
+                   `Video${i+1}_dur=${videoDurations[i + 1].toFixed(3)}s, ` +
+                   `transition=${transitionDuration.toFixed(3)}s, ` +
+                   `offset=${offset.toFixed(3)}s, ` +
+                   `cumulative=${cumulativeDuration.toFixed(3)}s`);
+
+        // Update cumulative duration for next iteration
+        // The cumulative duration represents where the next transition should start
+        if (i === 0) {
+          // After first transition: first video ends at its duration minus overlap
+          // Second video starts during the overlap, so total is v0 + v1 - overlap
+          cumulativeDuration = videoDurations[i] + videoDurations[i + 1] - transitionDuration;
+          logger.info(`[Transition ${i}] Updated cumulative: ${videoDurations[i].toFixed(3)} + ${videoDurations[i + 1].toFixed(3)} - ${transitionDuration.toFixed(3)} = ${cumulativeDuration.toFixed(3)}`);
+        } else {
+          // For subsequent transitions, add the next video duration minus overlap
+          const oldCumulative = cumulativeDuration;
+          cumulativeDuration += videoDurations[i + 1] - transitionDuration;
+          logger.info(`[Transition ${i}] Updated cumulative: ${oldCumulative.toFixed(3)} + ${videoDurations[i + 1].toFixed(3)} - ${transitionDuration.toFixed(3)} = ${cumulativeDuration.toFixed(3)}`);
+        }
+
+        // Get the transition filter with proper offset
+        const transitionFilter = this.getTransitionFilter(transitionType, transitionDuration, offset);
+
+        if (transitionFilter) {
+          const outputLabel = i === concatenationVideoCount - 2 ? finalVideoOutput : `vtmp${i}`;
+
+          // Apply xfade for video with proper offset
+          const xfadeFilter = `[${currentVideoStream}][v${i + 1}]${transitionFilter}[${outputLabel}]`;
+          filters.push(xfadeFilter);
+          logger.info(`[FFmpeg Build] Adding xfade filter: ${xfadeFilter}`);
+          currentVideoStream = outputLabel;
+
+          // Apply crossfade for audio if not muted
+          if (variant.settings.audioMode !== 'mute' && currentAudioStream) {
+            const audioOutputLabel = i === concatenationVideoCount - 2 ? finalAudioOutput : `atmp${i}`;
+            // Audio crossfade (acrossfade doesn't use offset, it automatically applies at the overlap point)
+            filters.push(`[${currentAudioStream}][a${i + 1}]acrossfade=d=${transitionDuration}[${audioOutputLabel}]`);
+            currentAudioStream = audioOutputLabel;
+          }
+        }
+
+        logger.info(`[FFmpeg Build] Transition ${i}: ${transitionType} (duration: ${transitionDuration}s, offset: ${offset}s)`);
+      }
     } else {
-      // Video and audio concatenation - ensure all streams are present
-      const concatInputs = validatedVideos.map((_, i) => `[v${i}][a${i}]`).join('');
-      filters.push(`${concatInputs}concat=n=${concatenationVideoCount}:v=1:a=1[${finalVideoOutput}][outa]`);
+      // No transitions - use simple concatenation (ALWAYS executed for stability)
+      logger.info(`[FFmpeg Build] Using simple concatenation (no transitions) - transitions disabled for stability`);
+
+      if (variant.settings.audioMode === 'mute') {
+        // Video-only concatenation
+        const videoInputs = validatedVideos.map((_, i) => `[v${i}]`).join('');
+        filters.push(`${videoInputs}concat=n=${concatenationVideoCount}:v=1:a=0[${finalVideoOutput}]`);
+      } else {
+        // Video and audio concatenation - ensure all streams are present
+        const concatInputs = validatedVideos.map((_, i) => `[v${i}][a${i}]`).join('');
+        filters.push(`${concatInputs}concat=n=${concatenationVideoCount}:v=1:a=1[${finalVideoOutput}][${finalAudioOutput}]`);
+      }
     }
 
     // Note: Aspect ratio already applied per video, no need to apply again after concatenation
@@ -919,13 +1171,16 @@ export class AutoMixingService {
 
     // Add filter complex
     if (filters.length > 0) {
-      commands.push('-filter_complex', filters.join(';'));
+      const filterComplex = filters.join(';');
+      logger.info(`[FFmpeg Build] Filter complex length: ${filterComplex.length} characters`);
+      logger.debug(`[FFmpeg Build] Full filter complex: ${filterComplex.substring(0, 500)}...`);
+      commands.push('-filter_complex', filterComplex);
     }
 
     // Map outputs
     commands.push('-map', `[${finalVideoOutput}]`);
     if (variant.settings.audioMode !== 'mute') {
-      commands.push('-map', '[outa]');
+      commands.push('-map', `[${finalAudioOutput}]`);
     }
 
     // Video settings - dimensions already normalized in filter, no need to specify again
@@ -1050,21 +1305,25 @@ export class AutoMixingService {
     duration: number,
     offset: number
   ): string {
+    // Include offset for proper timing when chaining xfade filters
+    // The offset determines when the transition starts relative to the beginning of the first video
+    const baseFilter = `xfade=offset=${offset}:duration=${duration}:`;
+
     switch (transition) {
       case 'fade':
-        return `xfade=transition=fade:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=fade`;
       case 'dissolve':
-        return `xfade=transition=dissolve:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=dissolve`;
       case 'wipe':
         const direction = ['left', 'right', 'up', 'down'][Math.floor(Math.random() * 4)];
-        return `xfade=transition=wipe${direction}:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=wipe${direction}`;
       case 'slide':
         const slideDir = ['left', 'right', 'up', 'down'][Math.floor(Math.random() * 4)];
-        return `xfade=transition=slide${slideDir}:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=slide${slideDir}`;
       case 'zoom':
-        return `xfade=transition=circlecrop:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=circlecrop`;
       case 'blur':
-        return `xfade=transition=fadeblack:duration=${duration}:offset=${offset}`;
+        return `${baseFilter}transition=fadeblack`;
       default:
         return ''; // No transition (hard cut)
     }

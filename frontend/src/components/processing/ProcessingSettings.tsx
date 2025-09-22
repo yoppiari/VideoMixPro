@@ -23,17 +23,7 @@ export interface MixingSettings {
   groupMixing: boolean;
   groupMixingMode: 'strict' | 'random';
 
-  // Transition Variations
-  transitionMixing: boolean;
-  transitionTypes: string[];
-  transitionDuration: {
-    min: number;
-    max: number;
-  };
-
-  // Color Variations
-  colorVariations: boolean;
-  colorIntensity: 'low' | 'medium' | 'high';
+  // Note: Transition and Color features removed for stability
 
   // Video Quality
   metadataSource: 'normal' | 'capcut' | 'vn' | 'inshot';
@@ -76,31 +66,87 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
     };
   }, []);
 
-  const [settings, setSettings] = useState<MixingSettings>({
-    orderMixing: true,
-    speedMixing: true,
-    differentStartingVideo: false,
-    speedRange: { min: 0.5, max: 2 },
-    allowedSpeeds: [0.5, 0.75, 1, 1.25, 1.5, 2],
-    groupMixing: false,
-    groupMixingMode: 'strict',
-    transitionMixing: false,
-    transitionTypes: ['fade', 'dissolve', 'wipe', 'slide'],
-    transitionDuration: { min: 0.2, max: 0.5 },
-    colorVariations: false,
-    colorIntensity: 'low',
-    metadataSource: 'normal',
-    bitrate: 'medium',
-    resolution: 'hd',
-    frameRate: 30,
-    aspectRatio: 'original',
-    durationType: 'original',
-    fixedDuration: 30,
-    smartTrimming: false,
-    durationDistributionMode: 'proportional',
-    audioMode: 'keep',
-    outputCount: 10
-  });
+  // Local storage key for settings persistence
+  const SETTINGS_STORAGE_KEY = 'videomix-processing-settings';
+
+  // Load saved settings from localStorage
+  const loadSavedSettings = (): Partial<MixingSettings> | null => {
+    try {
+      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('[ProcessingSettings] Loaded saved settings:', parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.warn('[ProcessingSettings] Failed to load saved settings:', error);
+    }
+    return null;
+  };
+
+  // Save settings to localStorage
+  const saveSettings = (settings: MixingSettings) => {
+    try {
+      // Only save the important user preferences
+      const toSave = {
+        orderMixing: settings.orderMixing,
+        speedMixing: settings.speedMixing,
+        differentStartingVideo: settings.differentStartingVideo,
+        groupMixing: settings.groupMixing,
+        groupMixingMode: settings.groupMixingMode,
+        allowedSpeeds: settings.allowedSpeeds,
+        speedRange: settings.speedRange,
+        metadataSource: settings.metadataSource,
+        bitrate: settings.bitrate,
+        resolution: settings.resolution,
+        frameRate: settings.frameRate,
+        aspectRatio: settings.aspectRatio,
+        durationType: settings.durationType,
+        fixedDuration: settings.fixedDuration,
+        smartTrimming: settings.smartTrimming,
+        durationDistributionMode: settings.durationDistributionMode,
+        audioMode: settings.audioMode
+      };
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toSave));
+      console.log('[ProcessingSettings] Saved settings to localStorage:', toSave);
+    } catch (error) {
+      console.warn('[ProcessingSettings] Failed to save settings:', error);
+    }
+  };
+
+  // Initialize settings with saved values or defaults
+  const getInitialSettings = (): MixingSettings => {
+    const saved = loadSavedSettings();
+    const defaults: MixingSettings = {
+      orderMixing: true,  // Enable by default for anti-fingerprinting
+      speedMixing: true,  // Enable by default for anti-fingerprinting
+      differentStartingVideo: true,  // Enable by default for variety
+      speedRange: { min: 0.5, max: 2 },
+      allowedSpeeds: [0.5, 0.75, 1, 1.25, 1.5, 2],
+      groupMixing: false,
+      groupMixingMode: 'strict',
+      // Transition and color features removed
+      metadataSource: 'normal',
+      bitrate: 'medium',
+      resolution: 'hd',
+      frameRate: 30,
+      aspectRatio: 'original',
+      durationType: 'original',
+      fixedDuration: 30,
+      smartTrimming: false,
+      durationDistributionMode: 'proportional',
+      audioMode: 'keep',
+      outputCount: 5  // Reduced default to 5 for faster testing
+    };
+
+    if (saved) {
+      // Merge saved settings with defaults, ensuring all required fields exist
+      return { ...defaults, ...saved };
+    }
+    return defaults;
+  };
+
+  const [settings, setSettings] = useState<MixingSettings>(getInitialSettings());
 
   const [variantEstimate, setVariantEstimate] = useState(0);
   const [creditEstimate, setCreditEstimate] = useState<{
@@ -128,14 +174,14 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
       }
 
       // If different starting video is enabled, we only use permutations with unique starting videos
-      // This divides the total permutations by the number of videos (each video starts 1/n of permutations)
+      // This effectively reduces the permutation count since we pick one from each group
       if (settings.differentStartingVideo && videoCount > 1) {
-        // We want each variant to start with a different video
-        // So we limit to min(outputCount, videoCount) unique starting videos
-        factorial = Math.min(factorial, videoCount * Math.floor(factorial / videoCount));
+        // Each video can start exactly once, so we get at most videoCount unique variants
+        // from the order permutations (one for each starting video)
+        total *= Math.min(factorial, videoCount);
+      } else {
+        total *= factorial;
       }
-
-      total *= factorial;
     }
 
     // Speed combinations (speeds^videos)
@@ -143,23 +189,16 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
       total *= Math.pow(settings.allowedSpeeds.length, videoCount);
     }
 
-    // Transition combinations (transitions^(videos-1))
-    if (settings.transitionMixing && videoCount > 1) {
-      // Transitions happen between clips, so n-1 transitions for n videos
-      total *= Math.pow(settings.transitionTypes.length, videoCount - 1);
-    }
-
-    // Color variations (3 intensity levels)
-    if (settings.colorVariations) {
-      total *= 3; // Low, medium, high intensity variations
-    }
+    // Transition and color features removed for stability
 
     setVariantEstimate(total);
   }, [settings, videoCount]);
 
-  // Update parent component when settings change
+  // Update parent component when settings change and save to localStorage
   useEffect(() => {
+    console.log('[ProcessingSettings] Settings changed, updating parent and saving to localStorage:', settings);
     onSettingsChange(settings);
+    saveSettings(settings);
   }, [settings, onSettingsChange]);
 
   // Calculate credit estimate when settings change
@@ -178,7 +217,6 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
           ...settings,
           // Map frontend field names to backend expected names
           speedVariations: settings.speedMixing,
-          transitionVariations: settings.transitionMixing,
           differentStartingVideo: settings.differentStartingVideo,
           groupMixing: settings.groupMixing
         });
@@ -391,92 +429,7 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
             )}
           </div>
 
-          {/* Transition Mixing */}
-          <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={settings.transitionMixing}
-                onChange={(e) => handleSettingChange('transitionMixing', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                <strong>Transition Effects</strong> - Random transitions between clips
-              </span>
-            </label>
-
-            {settings.transitionMixing && (
-              <div className="ml-6 mt-2 p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-600 mb-2">Select transition types:</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {['fade', 'dissolve', 'wipe', 'slide', 'zoom', 'blur'].map(type => (
-                    <button
-                      key={type}
-                      onClick={() => {
-                        const types = [...settings.transitionTypes];
-                        const index = types.indexOf(type);
-                        if (index >= 0) {
-                          types.splice(index, 1);
-                        } else {
-                          types.push(type);
-                        }
-                        handleSettingChange('transitionTypes', types);
-                      }}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors capitalize ${
-                        settings.transitionTypes.includes(type)
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Color Variations */}
-          <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={settings.colorVariations}
-                onChange={(e) => handleSettingChange('colorVariations', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                <strong>Color Variations</strong> - Subtle visual adjustments
-              </span>
-            </label>
-
-            {settings.colorVariations && (
-              <div className="ml-6 mt-2 p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-600 mb-2">Variation intensity:</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {['low', 'medium', 'high'].map(intensity => (
-                    <button
-                      key={intensity}
-                      onClick={() => handleSettingChange('colorIntensity', intensity)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        settings.colorIntensity === intensity
-                          ? 'bg-green-600 text-white'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                      }`}
-                    >
-                      {(() => {
-                        console.log('[Debug] Rendering intensity button:', { intensity, type: typeof intensity });
-                        if (intensity === 'low') return 'Low (±5%)';
-                        if (intensity === 'medium') return 'Medium (±10%)';
-                        if (intensity === 'high') return 'High (±15%)';
-                        return null;
-                      })()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Transition and Color features removed for platform stability */}
         </div>
 
         {/* Anti-Fingerprinting Strength Indicator */}
@@ -485,14 +438,12 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
             <span className="text-xs text-gray-600 font-medium">Anti-Fingerprinting Strength:</span>
             <div className="flex items-center gap-2">
               <div className="flex gap-1">
-                {[...Array(6)].map((_, i) => {
+                {[...Array(4)].map((_, i) => {
                   const activeOptions = [
                     settings.orderMixing,
                     settings.speedMixing,
                     settings.differentStartingVideo,
-                    settings.groupMixing,
-                    settings.transitionMixing,
-                    settings.colorVariations
+                    settings.groupMixing
                   ].filter(Boolean).length;
                   return (
                     <div
@@ -512,16 +463,13 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                     settings.orderMixing,
                     settings.speedMixing,
                     settings.differentStartingVideo,
-                    settings.groupMixing,
-                    settings.transitionMixing,
-                    settings.colorVariations
+                    settings.groupMixing
                   ].filter(Boolean).length;
                   if (count === 0) return 'None';
                   if (count === 1) return 'Weak';
                   if (count === 2) return 'Fair';
                   if (count === 3) return 'Good';
                   if (count === 4) return 'Strong';
-                  if (count === 5) return 'Very Strong';
                   return 'Maximum';
                 })()}
               </span>

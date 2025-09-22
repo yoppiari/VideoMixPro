@@ -426,9 +426,47 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                 </div>
               </div>
 
-              {job.status === 'FAILED' && job.errorMessage && (
-                <div className="mt-2 p-2 bg-red-50 rounded text-sm text-red-700">
-                  Error: {job.errorMessage}
+              {job.status === 'FAILED' && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-red-800 mb-1">Processing Failed</h4>
+                      <p className="text-sm text-red-700">
+                        {job.errorMessage || 'An unexpected error occurred during processing.'}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="bg-red-100 text-red-700 px-2 py-1 rounded">
+                          Job ID: {job.id.slice(-8)}
+                        </span>
+                        {job.startedAt && (
+                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded">
+                            Failed: {new Date(job.startedAt).toLocaleString()}
+                          </span>
+                        )}
+                        {job.creditsUsed && job.refundedAt && (
+                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+                            ✓ Credits Refunded
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-red-600">
+                        <details className="cursor-pointer">
+                          <summary className="hover:text-red-800">Show troubleshooting tips</summary>
+                          <div className="mt-1 p-2 bg-red-25 rounded text-xs">
+                            <ul className="list-disc list-inside space-y-1">
+                              <li>Try reducing the output count or duration</li>
+                              <li>Ensure video files are in supported formats (MP4, MOV, AVI)</li>
+                              <li>Check that all videos are properly uploaded</li>
+                              <li>Try again with simpler settings (no speed mixing)</li>
+                            </ul>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -517,11 +555,55 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                   </div>
                 )}
 
-                {selectedJob.errorMessage && (
+                {selectedJob.status === 'FAILED' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Error Message</label>
-                    <div className="mt-1 p-3 bg-red-50 rounded text-sm text-red-700">
-                      {selectedJob.errorMessage}
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Error Details</label>
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-start">
+                        <svg className="w-6 h-6 text-red-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-red-800 mb-2">Processing Failed</h4>
+                          <p className="text-sm text-red-700 mb-3">
+                            {selectedJob.errorMessage || 'An unexpected error occurred during video processing.'}
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-4 text-xs mb-3">
+                            <div>
+                              <span className="font-medium text-red-800">Job ID:</span>
+                              <span className="ml-1 font-mono text-red-600">{selectedJob.id}</span>
+                            </div>
+                            {selectedJob.startedAt && (
+                              <div>
+                                <span className="font-medium text-red-800">Failed At:</span>
+                                <span className="ml-1 text-red-600">{new Date(selectedJob.startedAt).toLocaleString()}</span>
+                              </div>
+                            )}
+                            {selectedJob.creditsUsed && (
+                              <div>
+                                <span className="font-medium text-red-800">Credits Used:</span>
+                                <span className="ml-1 text-red-600">{selectedJob.creditsUsed}</span>
+                                {selectedJob.refundedAt && (
+                                  <span className="ml-2 text-green-600 font-medium">✓ Refunded</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="border-t border-red-200 pt-3">
+                            <h5 className="text-sm font-medium text-red-800 mb-2">Troubleshooting Steps:</h5>
+                            <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+                              <li>Verify all video files are properly uploaded and accessible</li>
+                              <li>Try reducing the number of output videos</li>
+                              <li>Use simpler settings (disable speed mixing temporarily)</li>
+                              <li>Ensure video files are in supported formats (MP4, MOV, AVI)</li>
+                              <li>Try shorter duration if using fixed duration mode</li>
+                              <li>Contact support if the issue persists with Job ID: {selectedJob.id.slice(-8)}</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
