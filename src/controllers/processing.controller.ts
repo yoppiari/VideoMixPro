@@ -75,6 +75,16 @@ export class ProcessingController {
 
       // Sanitize settings with safe defaults (removing problematic properties)
       const processingSettings = {
+        // Required fields for VideoMixingOptions interface
+        outputFormat: 'MP4', // Default to MP4 format
+        mixingMode: Boolean(mixingSettings.groupMixing) ? 'MANUAL' : 'AUTO', // Based on groupMixing setting
+        quality: 'HIGH', // Default to high quality
+        metadata: {
+          static: {}, // Empty static metadata
+          includeDynamic: false, // No dynamic metadata
+          fields: [] // No specific fields
+        },
+
         // Core mixing options with validation
         orderMixing: Boolean(mixingSettings.orderMixing),
         speedMixing: Boolean(mixingSettings.speedMixing),

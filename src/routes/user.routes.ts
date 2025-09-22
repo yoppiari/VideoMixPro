@@ -14,5 +14,6 @@ router.put('/profile', userController.updateProfile);
 router.get('/credits', userController.getCredits);
 router.post('/credits/purchase', validateRequest(CreditPurchaseSchema), userController.purchaseCredits);
 router.get('/transactions', userController.getTransactions);
+router.get('/stats', userController.getStats);
 
 export default router;

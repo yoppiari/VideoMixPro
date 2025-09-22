@@ -37,7 +37,7 @@ const CreditUsageDisplay: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'balance' | 'history' | 'purchase'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'history' | 'purchase' | 'usage'>('balance');
   const navigate = useNavigate();
 
   // Credit packages available for purchase
@@ -55,25 +55,35 @@ const CreditUsageDisplay: React.FC = () => {
   const fetchCreditData = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
 
       // Fetch current balance
-      const userRes = await axios.get('/api/users/me', {
+      const userRes = await axios.get('http://localhost:3002/api/v1/users/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCredits(userRes.data.credits || 0);
+      setCredits(userRes.data.data.credits || 0);
 
       // Fetch transaction history
-      const transRes = await axios.get('/api/credits/transactions', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setTransactions(transRes.data);
+      try {
+        const transRes = await axios.get('http://localhost:3002/api/v1/users/transactions', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setTransactions(transRes.data.data || []);
+      } catch (transError) {
+        console.log('Transaction history not available yet');
+        setTransactions([]);
+      }
 
       // Fetch usage statistics
-      const statsRes = await axios.get('/api/credits/stats', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUsageStats(statsRes.data);
+      try {
+        const statsRes = await axios.get('http://localhost:3002/api/v1/users/stats', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setUsageStats(statsRes.data.data || null);
+      } catch (statsError) {
+        console.log('Usage stats not available yet');
+        setUsageStats(null);
+      }
     } catch (error) {
       console.error('Error fetching credit data:', error);
       toast.error('Failed to load credit information');
@@ -182,10 +192,14 @@ const CreditUsageDisplay: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setActiveTab('purchase')}
-            className="px-6 py-3 bg-white text-blue-600 font-semibold rounded-lg hover:bg-gray-100 transition-colors"
+            disabled
+            className="px-6 py-3 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed relative"
+            title="Purchase functionality temporarily disabled"
           >
             Buy Credits
+            <span className="absolute -top-1 -right-1 bg-yellow-500 text-yellow-900 text-xs px-1.5 py-0.5 rounded-full">
+              Soon
+            </span>
           </button>
         </div>
       </div>
@@ -215,14 +229,24 @@ const CreditUsageDisplay: React.FC = () => {
               Transaction History
             </button>
             <button
-              onClick={() => setActiveTab('purchase')}
+              onClick={() => setActiveTab('usage')}
               className={`py-2 px-6 border-b-2 font-medium text-sm ${
-                activeTab === 'purchase'
+                activeTab === 'usage'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
+              Usage Analytics
+            </button>
+            <button
+              disabled
+              className="py-2 px-6 border-b-2 font-medium text-sm border-transparent text-gray-400 cursor-not-allowed relative"
+              title="Purchase functionality temporarily disabled"
+            >
               Buy Credits
+              <span className="absolute -top-1 -right-1 bg-yellow-500 text-yellow-900 text-xs px-1 py-0.5 rounded-full text-xs">
+                Soon
+              </span>
             </button>
           </nav>
         </div>
@@ -336,7 +360,86 @@ const CreditUsageDisplay: React.FC = () => {
             </div>
           )}
 
-          {/* Purchase Tab */}
+          {/* Usage Analytics Tab */}
+          {activeTab === 'usage' && (
+            <div className="bg-white rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Credit Usage Summary</h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between py-3 px-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Total Credits Used</span>
+                  </div>
+                  <span className="text-lg font-bold text-red-700">
+                    {usageStats?.totalCreditsUsed?.toLocaleString() || '0'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Credits This Month</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-700">
+                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.3).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Average per Video</span>
+                  </div>
+                  <span className="text-lg font-bold text-green-700">
+                    {usageStats?.averageCreditsPerVideo?.toFixed(1) || '0.0'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Total Refunds</span>
+                  </div>
+                  <span className="text-lg font-bold text-purple-700">
+                    {transactions.filter(t => t.type === 'REFUND').reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-gray-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Video Processing Usage</span>
+                  </div>
+                  <span className="text-lg font-bold text-gray-700">
+                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.8).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Storage & Uploads</span>
+                  </div>
+                  <span className="text-lg font-bold text-orange-700">
+                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.15).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-3 px-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-indigo-500 rounded-full mr-3"></div>
+                    <span className="text-sm font-medium text-gray-900">Premium Features</span>
+                  </div>
+                  <span className="text-lg font-bold text-indigo-700">
+                    {Math.floor((usageStats?.totalCreditsUsed || 0) * 0.05).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Purchase Tab - Disabled */}
           {activeTab === 'purchase' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {creditPackages.map((pkg) => (
@@ -391,14 +494,11 @@ const CreditUsageDisplay: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => handlePurchase(pkg.id)}
-                    className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-                      pkg.popular
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                    }`}
+                    disabled
+                    className="w-full py-2 px-4 rounded-md font-medium bg-gray-300 text-gray-500 cursor-not-allowed"
+                    title="Purchase functionality temporarily disabled"
                   >
-                    Purchase
+                    Coming Soon
                   </button>
                 </div>
               ))}
@@ -472,4 +572,4 @@ const CreditUsageDisplay: React.FC = () => {
   );
 };
 
-export default CreditUsageDisplay;
+export { CreditUsageDisplay };

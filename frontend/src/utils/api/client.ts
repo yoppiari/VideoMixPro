@@ -90,6 +90,12 @@ class ApiClient {
     return response.data;
   }
 
+  // User endpoints
+  async getUserStats() {
+    const response = await this.client.get('/v1/users/stats');
+    return this.unwrapResponse(response);
+  }
+
   // Project endpoints
   async getProjects(page: number = 1, limit: number = 10) {
     const response = await this.client.get('/v1/projects', {

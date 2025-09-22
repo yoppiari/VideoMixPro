@@ -182,4 +182,107 @@ export class UserController {
       ResponseHelper.serverError(res, 'Failed to get transactions');
     }
   }
+
+  async getStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Get all stats in parallel
+      const [
+        totalProjects,
+        totalVideos,
+        processingJobs,
+        completedJobs,
+        failedJobs,
+        pendingJobs,
+        recentProjects
+      ] = await Promise.all([
+        // Total projects
+        prisma.project.count({
+          where: { userId }
+        }),
+        // Total videos
+        prisma.videoFile.count({
+          where: {
+            project: { userId }
+          }
+        }),
+        // Processing jobs
+        prisma.processingJob.count({
+          where: {
+            project: { userId },
+            status: 'PROCESSING'
+          }
+        }),
+        // Completed jobs
+        prisma.processingJob.count({
+          where: {
+            project: { userId },
+            status: 'COMPLETED'
+          }
+        }),
+        // Failed jobs
+        prisma.processingJob.count({
+          where: {
+            project: { userId },
+            status: 'FAILED'
+          }
+        }),
+        // Pending jobs
+        prisma.processingJob.count({
+          where: {
+            project: { userId },
+            status: 'PENDING'
+          }
+        }),
+        // Recent projects (last 5)
+        prisma.project.findMany({
+          where: { userId },
+          orderBy: { updatedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            status: true,
+            updatedAt: true,
+            _count: {
+              select: {
+                videoFiles: true,
+                processingJobs: true
+              }
+            }
+          }
+        })
+      ]);
+
+      const stats = {
+        totalProjects,
+        totalVideos,
+        processingJobs,
+        completedJobs,
+        failedJobs,
+        pendingJobs,
+        totalJobs: pendingJobs + processingJobs + completedJobs + failedJobs,
+        recentProjects: recentProjects.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          status: p.status,
+          videoCount: p._count.videoFiles,
+          jobCount: p._count.processingJobs,
+          lastActivity: p.updatedAt
+        }))
+      };
+
+      ResponseHelper.success(res, stats, 'User statistics retrieved successfully');
+    } catch (error) {
+      logger.error('Get user stats error:', error);
+      ResponseHelper.serverError(res, 'Failed to get user statistics');
+    }
+  }
 }

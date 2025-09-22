@@ -1,62 +1,48 @@
-import { PrismaClient } from '../../node_modules/.prisma/client-dev';
+import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
-import path from 'path';
 
-// Load environment-specific configuration
-const envFile = process.env.NODE_ENV === 'development'
-  ? '.env.development'
-  : '.env';
-
-dotenv.config({ path: path.resolve(process.cwd(), envFile) });
-
-// Type definitions for unified Prisma client
-type AnyPrismaClient = PrismaClient;
+// Load environment configuration
+dotenv.config();
 
 class DatabaseAdapter {
-  private client: AnyPrismaClient | null = null;
+  private client: PrismaClient | null = null;
   private isDevelopment: boolean;
 
   constructor() {
     this.isDevelopment = process.env.NODE_ENV === 'development';
   }
 
-  async connect(): Promise<AnyPrismaClient> {
+  async connect(): Promise<PrismaClient> {
     if (this.client) {
       return this.client;
     }
 
     try {
-      if (this.isDevelopment) {
-        console.log('🔧 Connecting to SQLite database (Development)...');
+      const dbType = this.isDevelopment ? 'SQLite' : 'PostgreSQL';
+      console.log(`🔧 Connecting to ${dbType} database (${process.env.NODE_ENV || 'development'})...`);
 
-        // Use SQLite for development
-        this.client = new PrismaClient({
-          datasources: {
-            db: {
-              url: process.env.DATABASE_URL_DEV || 'file:./prisma/dev.db'
-            }
-          },
-          log: ['error', 'warn']
-        }) as any;
-      } else {
-        console.log('🚀 Connecting to PostgreSQL database (Production)...');
-
-        // Use PostgreSQL for production
-        this.client = new PrismaClient({
-          datasources: {
-            db: {
-              url: process.env.DATABASE_URL
-            }
-          },
-          log: ['error', 'warn']
-        }) as any;
-      }
+      // Create Prisma client with appropriate logging
+      this.client = new PrismaClient({
+        log: process.env.NODE_ENV === 'development'
+          ? ['query', 'error', 'warn']
+          : ['error', 'warn']
+      });
 
       // Connect to database
-      await (this.client as any).$connect();
-      console.log('✅ Database connected successfully');
+      await this.client.$connect();
 
-      return this.client as AnyPrismaClient;
+      // Verify SQLite in development
+      if (this.isDevelopment) {
+        const dbUrl = process.env.DATABASE_URL || '';
+        if (!dbUrl.startsWith('file:')) {
+          console.warn('⚠️ Warning: DATABASE_URL should start with "file:" for SQLite');
+        }
+        console.log('✅ SQLite database connected successfully');
+      } else {
+        console.log('✅ PostgreSQL database connected successfully');
+      }
+
+      return this.client;
     } catch (error) {
       console.error('❌ Database connection failed:', error);
       throw error;
@@ -65,13 +51,13 @@ class DatabaseAdapter {
 
   async disconnect(): Promise<void> {
     if (this.client) {
-      await (this.client as any).$disconnect();
+      await this.client.$disconnect();
       this.client = null;
       console.log('Database disconnected');
     }
   }
 
-  getClient(): AnyPrismaClient {
+  getClient(): PrismaClient {
     if (!this.client) {
       throw new Error('Database not connected. Call connect() first.');
     }
@@ -106,16 +92,25 @@ class DatabaseAdapter {
 // Export singleton instance
 export const database = new DatabaseAdapter();
 
+// Initialize Prisma client
+let prismaClient: PrismaClient | null = null;
+
 // Export Prisma client for backward compatibility
-export const prisma = new Proxy({} as any, {
+export const prisma = new Proxy({} as PrismaClient, {
   get(target, prop) {
-    const client = database.getClient();
-    return client[prop as keyof typeof client];
+    if (!prismaClient) {
+      prismaClient = new PrismaClient({
+        log: process.env.NODE_ENV === 'development'
+          ? ['error', 'warn']
+          : ['error']
+      });
+    }
+    return prismaClient[prop as keyof PrismaClient];
   }
 });
 
 // Export types for use in application
-export type { User, Project, VideoFile, ProcessingJob } from '../../node_modules/.prisma/client-dev';
+export type { User, Project, VideoFile, ProcessingJob } from '@prisma/client';
 
 // Export enums as objects for SQLite compatibility
 export const LicenseType = {

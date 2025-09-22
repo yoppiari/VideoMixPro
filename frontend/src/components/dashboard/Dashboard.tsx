@@ -9,6 +9,9 @@ interface DashboardStats {
   totalVideos: number;
   processingJobs: number;
   completedJobs: number;
+  failedJobs?: number;
+  pendingJobs?: number;
+  totalJobs?: number;
 }
 
 interface RecentProject {
@@ -38,22 +41,43 @@ const Dashboard: React.FC = () => {
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
-      // Load projects (this will give us basic stats)
-      const projectsResponse = await apiClient.getProjects();
-      if (projectsResponse.success) {
-        const projects = projectsResponse.data;
-        setRecentProjects(projects.slice(0, 5)); // Show latest 5 projects
 
-        // Calculate stats
-        const totalVideos = projects.reduce((sum: number, project: any) => sum + (project.videoCount || 0), 0);
-        setStats(prev => ({
-          ...prev,
-          totalProjects: projects.length,
-          totalVideos: totalVideos,
-        }));
+      // Fetch user statistics
+      const statsResponse = await apiClient.getUserStats();
+      if (statsResponse) {
+        setStats({
+          totalProjects: statsResponse.totalProjects || 0,
+          totalVideos: statsResponse.totalVideos || 0,
+          processingJobs: statsResponse.processingJobs || 0,
+          completedJobs: statsResponse.completedJobs || 0,
+          failedJobs: statsResponse.failedJobs || 0,
+          pendingJobs: statsResponse.pendingJobs || 0,
+          totalJobs: statsResponse.totalJobs || 0
+        });
+
+        // Set recent projects from stats
+        if (statsResponse.recentProjects) {
+          setRecentProjects(statsResponse.recentProjects);
+        }
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      // Fallback to loading projects directly if stats endpoint fails
+      try {
+        const projectsResponse = await apiClient.getProjects();
+        if (projectsResponse.success) {
+          const projects = projectsResponse.data;
+          setRecentProjects(projects.slice(0, 5));
+          const totalVideos = projects.reduce((sum: number, project: any) => sum + (project.videoCount || 0), 0);
+          setStats(prev => ({
+            ...prev,
+            totalProjects: projects.length,
+            totalVideos: totalVideos,
+          }));
+        }
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+      }
     } finally {
       setIsLoading(false);
     }

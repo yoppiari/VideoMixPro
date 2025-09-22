@@ -1,9 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import JobMonitor from './JobMonitor';
 import DashboardLayout from '../layout/DashboardLayout';
+import apiClient from '../../utils/api/client';
+
+interface JobStats {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  total: number;
+}
 
 const ProcessingDashboard: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
+  const [stats, setStats] = useState<JobStats>({
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+    total: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.getUserStats();
+      if (response) {
+        setStats({
+          pending: response.pendingJobs || 0,
+          processing: response.processingJobs || 0,
+          completed: response.completedJobs || 0,
+          failed: response.failedJobs || 0,
+          total: response.totalJobs || 0
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleJobsUpdate = (updatedStats: JobStats) => {
+    setStats(updatedStats);
+  };
 
   return (
     <DashboardLayout>
@@ -33,7 +78,7 @@ const ProcessingDashboard: React.FC = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Pending</dt>
-                    <dd className="text-lg font-medium text-gray-900">-</dd>
+                    <dd className="text-lg font-medium text-gray-900">{isLoading ? '-' : stats.pending}</dd>
                   </dl>
                 </div>
               </div>
@@ -51,7 +96,7 @@ const ProcessingDashboard: React.FC = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Processing</dt>
-                    <dd className="text-lg font-medium text-gray-900">-</dd>
+                    <dd className="text-lg font-medium text-gray-900">{isLoading ? '-' : stats.processing}</dd>
                   </dl>
                 </div>
               </div>
@@ -69,7 +114,7 @@ const ProcessingDashboard: React.FC = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Completed</dt>
-                    <dd className="text-lg font-medium text-gray-900">-</dd>
+                    <dd className="text-lg font-medium text-gray-900">{isLoading ? '-' : stats.completed}</dd>
                   </dl>
                 </div>
               </div>
@@ -87,7 +132,7 @@ const ProcessingDashboard: React.FC = () => {
                 <div className="ml-5 w-0 flex-1">
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Failed</dt>
-                    <dd className="text-lg font-medium text-gray-900">-</dd>
+                    <dd className="text-lg font-medium text-gray-900">{isLoading ? '-' : stats.failed}</dd>
                   </dl>
                 </div>
               </div>
@@ -99,11 +144,11 @@ const ProcessingDashboard: React.FC = () => {
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
             {[
-              { key: 'all', label: 'All Jobs', count: null },
-              { key: 'pending', label: 'Pending', count: null },
-              { key: 'processing', label: 'Processing', count: null },
-              { key: 'completed', label: 'Completed', count: null },
-              { key: 'failed', label: 'Failed', count: null },
+              { key: 'all', label: 'All Jobs', count: stats.total },
+              { key: 'pending', label: 'Pending', count: stats.pending },
+              { key: 'processing', label: 'Processing', count: stats.processing },
+              { key: 'completed', label: 'Completed', count: stats.completed },
+              { key: 'failed', label: 'Failed', count: stats.failed },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -129,6 +174,8 @@ const ProcessingDashboard: React.FC = () => {
         <JobMonitor
           showAllJobs={true}
           refreshInterval={3000}
+          onStatsUpdate={handleJobsUpdate}
+          statusFilter={filter === 'all' ? undefined : filter}
         />
 
         {/* Processing Tips */}

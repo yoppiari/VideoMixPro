@@ -18,6 +18,11 @@ interface VideoFile {
   createdAt?: string;
   uploadedAt?: string;
   groupId?: string | null;
+  group?: {
+    id: string;
+    name: string;
+    order: number;
+  } | null;
 }
 
 interface VideoGroup {
@@ -46,10 +51,15 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
   const [selectedVideos, setSelectedVideos] = useState<string[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [draggedVideo, setDraggedVideo] = useState<VideoFile | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchGroups();
-  }, [projectId]);
+  }, [projectId, videos]);
+
+  useEffect(() => {
+    console.log('[VideoGroupManager] Videos data:', videos);
+  }, [videos]);
 
   const fetchGroups = async () => {
     try {
@@ -62,6 +72,8 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
           videos: group.videoFiles || group.videos || []
         }));
         setGroups(groupsData);
+        console.log('[VideoGroupManager] Groups loaded:', groupsData);
+
         // Auto-expand groups with videos
         const expanded = new Set<string>();
         groupsData.forEach((group: VideoGroup) => {
@@ -156,26 +168,83 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
   const handleDragStart = (e: React.DragEvent, video: VideoFile) => {
     setDraggedVideo(video);
     e.dataTransfer.effectAllowed = 'move';
+
+    // Create a custom drag preview
+    const dragPreview = document.createElement('div');
+    dragPreview.textContent = video.originalName;
+    dragPreview.style.position = 'absolute';
+    dragPreview.style.top = '-1000px';
+    dragPreview.style.padding = '8px 12px';
+    dragPreview.style.background = '#3B82F6';
+    dragPreview.style.color = 'white';
+    dragPreview.style.borderRadius = '6px';
+    dragPreview.style.fontSize = '14px';
+    document.body.appendChild(dragPreview);
+    e.dataTransfer.setDragImage(dragPreview, 0, 0);
+
+    // Clean up the preview after drag starts
+    setTimeout(() => {
+      document.body.removeChild(dragPreview);
+    }, 0);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, groupId: string | null) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    // For unassigned section, we use string 'unassigned', for groups we use their ID
+    setDragOverGroupId(groupId);
   };
 
-  const handleDrop = async (e: React.DragEvent, groupId: string | null) => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're leaving the drop zone entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      setDragOverGroupId(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetGroupId: string | null) => {
     e.preventDefault();
+    e.stopPropagation();
+    setDragOverGroupId(null);
+
     if (!draggedVideo) return;
+
+    // The actual groupId to send to the API (null for unassigned)
+    const actualGroupId = targetGroupId === 'unassigned' ? null : targetGroupId;
+
+    // Don't move if it's already in the same group
+    if (draggedVideo.groupId === actualGroupId) {
+      setDraggedVideo(null);
+      return;
+    }
 
     try {
       setLoading(true);
-      const response = await apiClient.assignVideoToGroup(draggedVideo.id, groupId);
-      if (response.success) {
+      console.log(`Moving video ${draggedVideo.id} to group ${actualGroupId}`);
+      const response = await apiClient.assignVideoToGroup(draggedVideo.id, actualGroupId);
+      console.log('API response:', response);
+      if (response.success !== false) {
+        // Update local state immediately for better UX
+        const updatedVideo = { ...draggedVideo, groupId: actualGroupId };
+
+        // Refresh the groups and videos
         await fetchGroups();
         if (onUpdate) onUpdate();
+
+        console.log('Video moved successfully');
+
+        // Show success notification (optional - add toast library if you want)
+        const groupName = actualGroupId
+          ? groups.find(g => g.id === actualGroupId)?.name
+          : 'Unassigned';
+        console.log(`✅ Video moved to ${groupName}`);
+      } else {
+        console.error('Failed to move video:', response.error);
       }
     } catch (error) {
       console.error('Failed to move video:', error);
+      alert('Failed to move video. Please try again.');
     } finally {
       setDraggedVideo(null);
       setLoading(false);
@@ -203,11 +272,23 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
     return `${mb.toFixed(1)} MB`;
   };
 
-  // Get unassigned videos
-  const unassignedVideos = videos.filter(v => !v.groupId);
+  // Get unassigned videos - check both groupId and group object
+  const unassignedVideos = videos.filter(v => !v.groupId && !v.group);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Loading overlay */}
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <svg className="animate-spin h-8 w-8 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm text-gray-600">Moving video...</span>
+          </div>
+        </div>
+      )}
       {/* Header Actions */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-900">Video Groups</h3>
@@ -225,8 +306,13 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
         {groups.map((group) => (
           <div
             key={group.id}
-            className="border border-gray-200 rounded-lg overflow-hidden"
-            onDragOver={handleDragOver}
+            className={`border rounded-lg overflow-hidden transition-all ${
+              dragOverGroupId === group.id
+                ? 'border-blue-400 bg-blue-50 shadow-lg'
+                : 'border-gray-200'
+            }`}
+            onDragOver={(e) => handleDragOver(e, group.id)}
+            onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, group.id)}
           >
             <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
@@ -277,7 +363,11 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
                         key={video.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, video)}
-                        className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-lg cursor-move hover:shadow-sm"
+                        className={`flex items-center space-x-3 p-3 bg-white border rounded-lg hover:shadow-sm transition-all ${
+                          draggedVideo?.id === video.id
+                            ? 'opacity-50 border-blue-300 cursor-grabbing'
+                            : 'border-gray-200 cursor-grab hover:border-gray-300'
+                        }`}
                       >
                         <VideoCameraIcon className="h-5 w-5 text-gray-400" />
                         <div className="flex-1 min-w-0">
@@ -292,9 +382,14 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Drag videos here to add them to this group
-                  </p>
+                  <div className="text-center py-8">
+                    <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <p className="text-sm text-gray-500">
+                      Drag videos here to add them to this group
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -305,9 +400,14 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
       {/* Unassigned Videos */}
       {unassignedVideos.length > 0 && (
         <div
-          className="border border-gray-200 rounded-lg overflow-hidden"
-          onDragOver={handleDragOver}
-          onDrop={(e) => handleDrop(e, null)}
+          className={`border rounded-lg overflow-hidden transition-all ${
+            dragOverGroupId === 'unassigned'
+              ? 'border-blue-400 bg-blue-50 shadow-lg'
+              : 'border-gray-200'
+          }`}
+          onDragOver={(e) => handleDragOver(e, 'unassigned')}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, 'unassigned')}
         >
           <div className="bg-gray-50 px-4 py-3">
             <h4 className="text-md font-medium text-gray-900">
@@ -324,7 +424,11 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
                   key={video.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, video)}
-                  className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-lg cursor-move hover:shadow-sm"
+                  className={`flex items-center space-x-3 p-3 bg-white border rounded-lg hover:shadow-sm transition-all ${
+                    draggedVideo?.id === video.id
+                      ? 'opacity-50 border-blue-300 cursor-grabbing'
+                      : 'border-gray-200 cursor-grab hover:border-gray-300'
+                  }`}
                 >
                   <input
                     type="checkbox"

@@ -15,7 +15,7 @@ import ProcessingDashboard from './components/processing/ProcessingDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import CommunicationDashboard from './components/admin/CommunicationDashboard';
 import LicenseVerification from './components/license/LicenseVerification';
-import CreditUsageDisplay from './components/credits/CreditUsageDisplay';
+import { CreditUsageDisplay } from './components/credits/CreditUsageDisplay';
 import './App.css';
 
 function App() {

@@ -785,9 +785,8 @@ export class VideoProcessingService {
       throw new Error('No video files to process');
     }
 
-    if (videoFiles.length < 2) {
-      throw new Error('Minimum 2 videos required for mixing');
-    }
+    // Allow single video processing - just duplicate or loop it
+    // No minimum requirement, we'll handle single video case in processing
 
     // Log details of each video file
     videoFiles.forEach((file: any, idx: number) => {
@@ -1111,7 +1110,7 @@ export class VideoProcessingService {
       });
 
       // Configure output settings
-      command = this.configureOutputSettings(command, settings);
+      command = this.configureOutputSettings(command, settings, videos.length);
 
       // Add metadata
       command = this.addMetadata(command, settings.metadata, videos);
@@ -1211,25 +1210,119 @@ export class VideoProcessingService {
     });
   }
 
-  private configureOutputSettings(command: ffmpeg.FfmpegCommand, settings: VideoMixingOptions): ffmpeg.FfmpegCommand {
-    // Apply quality settings
-    command = this.applyQualitySettings(command, settings.quality);
-
-    // Concatenate videos with crossfade transitions
-    const filterComplex = this.buildFilterComplex(settings);
-    if (filterComplex) {
+  private configureOutputSettings(command: ffmpeg.FfmpegCommand, settings: VideoMixingOptions, videoCount: number): ffmpeg.FfmpegCommand {
+    // Build filter complex with quality settings integrated
+    const filterComplex = this.buildFilterComplex(settings, videoCount);
+    if (filterComplex && filterComplex.length > 0) {
       command = command.complexFilter(filterComplex);
+
+      // Map outputs based on whether audio is included
+      const hasAudio = settings.audioMode !== 'mute' && videoCount > 0;
+      if (hasAudio) {
+        command = command.outputOptions(['-map', '[outv]', '-map', '[outa]']);
+      } else {
+        command = command.outputOptions(['-map', '[outv]']);
+      }
+
+      // Apply bitrate settings without filter (since filter is in complex)
+      command = this.applyBitrateSettings(command, settings.quality);
+    } else {
+      // No complex filter, apply quality settings normally
+      command = this.applyQualitySettings(command, settings.quality);
     }
 
     return command;
   }
 
-  private buildFilterComplex(settings: VideoMixingOptions): string[] | undefined {
-    // Simple concatenation for now
-    // In production, you'd add more sophisticated transitions and effects
-    return [
-      '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]'
-    ];
+  private buildFilterComplex(settings: VideoMixingOptions, videoCount: number): string[] | undefined {
+    // Handle edge cases
+    if (videoCount === 0) {
+      return undefined;
+    }
+
+    const hasAudio = settings.audioMode !== 'mute';
+    const filters: string[] = [];
+
+    // Get scale filter for quality
+    const scaleFilter = this.getScaleFilter(settings.quality);
+
+    if (videoCount === 1) {
+      // For single video, we can still apply filters or duplicate it
+      // Check if we need to loop/duplicate for mixing effect
+      if (settings.orderMixing || settings.differentStartingVideo) {
+        // Duplicate the single video to create variation
+        filters.push('[0:v]split=2[v0][v1]');
+        if (hasAudio) {
+          filters.push('[0:a]asplit=2[a0][a1]');
+          filters.push(`[v0][a0][v1][a1]concat=n=2:v=1:a=1[tmpv][tmpa]`);
+          // Apply scale if needed
+          if (scaleFilter) {
+            filters.push(`[tmpv]${scaleFilter}[outv]`);
+            filters.push('[tmpa]anull[outa]');
+          } else {
+            filters.push('[tmpv]copy[outv]');
+            filters.push('[tmpa]anull[outa]');
+          }
+        } else {
+          filters.push(`[v0][v1]concat=n=2:v=1:a=0[tmpv]`);
+          // Apply scale if needed
+          if (scaleFilter) {
+            filters.push(`[tmpv]${scaleFilter}[outv]`);
+          } else {
+            filters.push('[tmpv]copy[outv]');
+          }
+        }
+      } else {
+        // For simple single video, apply scale if needed
+        if (scaleFilter) {
+          filters.push(`[0:v]${scaleFilter}[outv]`);
+        } else {
+          filters.push('[0:v]copy[outv]');
+        }
+        if (hasAudio) {
+          filters.push('[0:a]anull[outa]');
+        }
+      }
+      return filters;
+    }
+
+    // Build dynamic filter for multiple videos
+    const inputs: string[] = [];
+
+    for (let i = 0; i < videoCount; i++) {
+      if (hasAudio) {
+        inputs.push(`[${i}:v][${i}:a]`);
+      } else {
+        inputs.push(`[${i}:v]`);
+      }
+    }
+
+    // Create concat filter with correct number of inputs
+    if (hasAudio) {
+      const concatString = `${inputs.join('')}concat=n=${videoCount}:v=1:a=1[tmpv][tmpa]`;
+      filters.push(concatString);
+
+      // Apply scale filter to video output
+      if (scaleFilter) {
+        filters.push(`[tmpv]${scaleFilter}[outv]`);
+      } else {
+        filters.push('[tmpv]copy[outv]');
+      }
+      filters.push('[tmpa]anull[outa]');
+    } else {
+      // No audio processing needed
+      const concatString = `${inputs.join('')}concat=n=${videoCount}:v=1:a=0[tmpv]`;
+      filters.push(concatString);
+
+      // Apply scale filter to video output
+      if (scaleFilter) {
+        filters.push(`[tmpv]${scaleFilter}[outv]`);
+      } else {
+        filters.push('[tmpv]copy[outv]');
+      }
+    }
+
+    return filters;
   }
 
   private addMetadata(command: ffmpeg.FfmpegCommand, metadata: any, sourceVideos: any[]): ffmpeg.FfmpegCommand {
@@ -1360,6 +1453,55 @@ export class VideoProcessingService {
   // ==================== Helper Functions ====================
 
   /**
+   * Get scale filter string for quality setting
+   */
+  private getScaleFilter(quality: VideoQuality): string | null {
+    switch (quality) {
+      case VideoQuality.LOW:
+        return 'scale=640:-2';
+      case VideoQuality.MEDIUM:
+        return 'scale=-2:720';
+      case VideoQuality.HIGH:
+        return 'scale=-2:1080';
+      case VideoQuality.ULTRA:
+        return 'scale=min(3840\\,iw):min(2160\\,ih):force_original_aspect_ratio=decrease';
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Apply bitrate settings without video filter
+   */
+  private applyBitrateSettings(command: ffmpeg.FfmpegCommand, quality: VideoQuality): ffmpeg.FfmpegCommand {
+    // Set video codec
+    command = command.videoCodec('libx264');
+
+    // Set bitrate based on quality
+    switch (quality) {
+      case VideoQuality.LOW:
+        command = command.videoBitrate('500k');
+        break;
+      case VideoQuality.MEDIUM:
+        command = command.videoBitrate('1000k');
+        break;
+      case VideoQuality.HIGH:
+        command = command.videoBitrate('2000k');
+        break;
+      case VideoQuality.ULTRA:
+        command = command.videoBitrate('4000k');
+        break;
+      default:
+        command = command.videoBitrate('1000k');
+    }
+
+    // Set audio codec
+    command = command.audioCodec('aac').audioBitrate('128k');
+
+    return command;
+  }
+
+  /**
    * Apply quality settings to FFmpeg command
    */
   private applyQualitySettings(command: ffmpeg.FfmpegCommand, quality: VideoQuality): ffmpeg.FfmpegCommand {
@@ -1368,16 +1510,24 @@ export class VideoProcessingService {
 
     switch (quality) {
       case VideoQuality.LOW:
-        command = command.videoBitrate('500k').size('640x360');
+        // Use scale filter to maintain aspect ratio with max width
+        command = command.videoBitrate('500k')
+          .outputOption('-vf', 'scale=640:-2');
         break;
       case VideoQuality.MEDIUM:
-        command = command.videoBitrate('1000k').size('1280x720');
+        // Scale to 720p height maintaining aspect ratio
+        command = command.videoBitrate('1000k')
+          .outputOption('-vf', 'scale=-2:720');
         break;
       case VideoQuality.HIGH:
-        command = command.videoBitrate('2000k').size('1920x1080');
+        // Scale to 1080p height maintaining aspect ratio
+        command = command.videoBitrate('2000k')
+          .outputOption('-vf', 'scale=-2:1080');
         break;
       case VideoQuality.ULTRA:
-        command = command.videoBitrate('4000k').size('1920x1080');
+        // Scale to 4K if needed, but don't upscale
+        command = command.videoBitrate('4000k')
+          .outputOption('-vf', 'scale=\'min(3840,iw)\':\'min(2160,ih)\':force_original_aspect_ratio=decrease');
         break;
       default:
         command = command.videoBitrate('1000k');
@@ -1405,42 +1555,48 @@ export class VideoProcessingService {
   }
 
   /**
-   * Get text position coordinates for watermark
+   * Get text position coordinates for watermark (responsive to video size)
    */
   private getTextPosition(position: string): { x: string; y: string } {
+    // Use percentage-based padding (2% of video dimensions)
+    const padding = 'min(w*0.02,h*0.02)';
+
     switch (position) {
       case 'top-left':
-        return { x: '10', y: '10' };
+        return { x: padding, y: padding };
       case 'top-right':
-        return { x: 'w-tw-10', y: '10' };
+        return { x: `w-tw-${padding}`, y: padding };
       case 'bottom-left':
-        return { x: '10', y: 'h-th-10' };
+        return { x: padding, y: `h-th-${padding}` };
       case 'bottom-right':
-        return { x: 'w-tw-10', y: 'h-th-10' };
+        return { x: `w-tw-${padding}`, y: `h-th-${padding}` };
       case 'center':
         return { x: '(w-tw)/2', y: '(h-th)/2' };
       default:
-        return { x: 'w-tw-10', y: 'h-th-10' };
+        return { x: `w-tw-${padding}`, y: `h-th-${padding}` };
     }
   }
 
   /**
-   * Get image position coordinates for watermark
+   * Get image position coordinates for watermark (responsive to video size)
    */
   private getImagePosition(position: string): { x: string; y: string } {
+    // Use percentage-based padding (2% of video dimensions)
+    const padding = 'min(main_w*0.02,main_h*0.02)';
+
     switch (position) {
       case 'top-left':
-        return { x: '10', y: '10' };
+        return { x: padding, y: padding };
       case 'top-right':
-        return { x: 'main_w-overlay_w-10', y: '10' };
+        return { x: `main_w-overlay_w-${padding}`, y: padding };
       case 'bottom-left':
-        return { x: '10', y: 'main_h-overlay_h-10' };
+        return { x: padding, y: `main_h-overlay_h-${padding}` };
       case 'bottom-right':
-        return { x: 'main_w-overlay_w-10', y: 'main_h-overlay_h-10' };
+        return { x: `main_w-overlay_w-${padding}`, y: `main_h-overlay_h-${padding}` };
       case 'center':
         return { x: '(main_w-overlay_w)/2', y: '(main_h-overlay_h)/2' };
       default:
-        return { x: 'main_w-overlay_w-10', y: 'main_h-overlay_h-10' };
+        return { x: `main_w-overlay_w-${padding}`, y: `main_h-overlay_h-${padding}` };
     }
   }
 

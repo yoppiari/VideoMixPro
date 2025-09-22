@@ -27,16 +27,28 @@ interface Job {
   updatedAt: string;
 }
 
+interface JobStats {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  total: number;
+}
+
 interface JobMonitorProps {
   projectId?: string;
   refreshInterval?: number;
   showAllJobs?: boolean;
+  onStatsUpdate?: (stats: JobStats) => void;
+  statusFilter?: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
 const JobMonitor: React.FC<JobMonitorProps> = ({
   projectId,
   refreshInterval = 5000,
-  showAllJobs = false
+  showAllJobs = false,
+  onStatsUpdate,
+  statusFilter
 }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +88,20 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
       }
 
       // Ensure jobs is always an array
-      setJobs(Array.isArray(jobs) ? jobs : []);
+      const validJobs = Array.isArray(jobs) ? jobs : [];
+      setJobs(validJobs);
+
+      // Calculate and update stats if callback provided
+      if (onStatsUpdate) {
+        const stats: JobStats = {
+          pending: validJobs.filter(job => job.status === 'PENDING').length,
+          processing: validJobs.filter(job => job.status === 'PROCESSING').length,
+          completed: validJobs.filter(job => job.status === 'COMPLETED').length,
+          failed: validJobs.filter(job => job.status === 'FAILED').length,
+          total: validJobs.length
+        };
+        onStatsUpdate(stats);
+      }
     } catch (error) {
       console.error('Error fetching jobs:', error);
       setError('Failed to fetch jobs');
@@ -354,7 +379,13 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
             </p>
           </div>
         ) : (
-          jobs.map((job) => (
+          (() => {
+            // Apply status filter if provided
+            const filteredJobs = statusFilter
+              ? jobs.filter(job => job.status.toLowerCase() === statusFilter.toLowerCase())
+              : jobs;
+
+            return filteredJobs.map((job) => (
             <div key={job.id} className="px-6 py-4 hover:bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -470,7 +501,8 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                 </div>
               )}
             </div>
-          ))
+          ));
+          })()
         )}
       </div>
 
