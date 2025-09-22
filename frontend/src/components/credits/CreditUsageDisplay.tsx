@@ -187,7 +187,7 @@ const CreditUsageDisplay: React.FC = () => {
           <div className="text-white">
             <h2 className="text-2xl font-bold mb-2">Credit Balance</h2>
             <div className="flex items-center">
-              <span className="text-5xl font-bold">{credits.toLocaleString()}</span>
+              <span className="text-5xl font-bold">{(credits || 0).toLocaleString()}</span>
               <span className="ml-3 text-xl opacity-75">credits</span>
             </div>
           </div>
@@ -263,7 +263,7 @@ const CreditUsageDisplay: React.FC = () => {
                   </svg>
                 </div>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {usageStats.totalCreditsUsed.toLocaleString()}
+                  {(usageStats?.totalCreditsUsed || 0).toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">credits consumed</p>
               </div>
@@ -289,7 +289,7 @@ const CreditUsageDisplay: React.FC = () => {
                   </svg>
                 </div>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {usageStats.averageCreditsPerVideo.toFixed(1)}
+                  {(usageStats?.averageCreditsPerVideo || 0).toFixed(1)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">credits/video</p>
               </div>
@@ -402,7 +402,7 @@ const CreditUsageDisplay: React.FC = () => {
                     <span className="text-sm font-medium text-gray-900">Total Refunds</span>
                   </div>
                   <span className="text-lg font-bold text-purple-700">
-                    {transactions.filter(t => t.type === 'REFUND').reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                    {(transactions?.filter(t => t.type === 'REFUND')?.reduce((sum, t) => sum + t.amount, 0) || 0).toLocaleString()}
                   </span>
                 </div>
 
@@ -469,7 +469,7 @@ const CreditUsageDisplay: React.FC = () => {
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">Credits</span>
-                      <span className="font-medium text-gray-900">{pkg.credits.toLocaleString()}</span>
+                      <span className="font-medium text-gray-900">{(pkg?.credits || 0).toLocaleString()}</span>
                     </div>
                     {pkg.bonus > 0 && (
                       <div className="flex items-center justify-between text-sm">
@@ -480,14 +480,14 @@ const CreditUsageDisplay: React.FC = () => {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">Total</span>
                       <span className="font-bold text-gray-900">
-                        {(pkg.credits + pkg.bonus).toLocaleString()}
+                        {((pkg?.credits || 0) + (pkg?.bonus || 0)).toLocaleString()}
                       </span>
                     </div>
                     <div className="border-t pt-3">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-500">Cost per credit</span>
                         <span className="font-medium text-gray-900">
-                          ${(pkg.price / (pkg.credits + pkg.bonus)).toFixed(3)}
+                          ${(pkg?.price / ((pkg?.credits || 0) + (pkg?.bonus || 0)) || 0).toFixed(3)}
                         </span>
                       </div>
                     </div>
@@ -540,7 +540,7 @@ const CreditUsageDisplay: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-500">Credits</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {(selectedPackage.credits + selectedPackage.bonus).toLocaleString()}
+                    {((selectedPackage?.credits || 0) + (selectedPackage?.bonus || 0)).toLocaleString()}
                   </span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
