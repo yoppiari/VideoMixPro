@@ -18,7 +18,21 @@ class DatabaseAdapter {
     }
 
     try {
-      const dbType = this.isDevelopment ? 'SQLite' : 'PostgreSQL';
+      // Detect database type from DATABASE_URL or DATABASE_PROVIDER
+      const dbUrl = process.env.DATABASE_URL || '';
+      const dbProvider = process.env.DATABASE_PROVIDER || '';
+      
+      let dbType = 'Unknown';
+      let isPostgreSQL = false;
+      
+      if (dbUrl.startsWith('file:') || dbProvider === 'sqlite') {
+        dbType = 'SQLite';
+        isPostgreSQL = false;
+      } else if (dbUrl.startsWith('postgres') || dbProvider === 'postgresql') {
+        dbType = 'PostgreSQL';
+        isPostgreSQL = true;
+      }
+      
       console.log(`🔧 Connecting to ${dbType} database (${process.env.NODE_ENV || 'development'})...`);
 
       // Create Prisma client with appropriate logging
@@ -31,15 +45,11 @@ class DatabaseAdapter {
       // Connect to database
       await this.client.$connect();
 
-      // Verify SQLite in development
-      if (this.isDevelopment) {
-        const dbUrl = process.env.DATABASE_URL || '';
-        if (!dbUrl.startsWith('file:')) {
-          console.warn('⚠️ Warning: DATABASE_URL should start with "file:" for SQLite');
-        }
-        console.log('✅ SQLite database connected successfully');
-      } else {
+      // Success message based on actual database type
+      if (isPostgreSQL) {
         console.log('✅ PostgreSQL database connected successfully');
+      } else {
+        console.log('✅ SQLite database connected successfully');
       }
 
       return this.client;

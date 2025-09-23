@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { database } from '@/utils/database';
+import { DbHelper } from '@/utils/db-helper';
 import logger from '@/utils/logger';
 
 export interface Notification {
@@ -199,7 +200,7 @@ class NotificationService extends EventEmitter {
           type,
           title,
           message,
-          data: JSON.stringify(data),
+          data: DbHelper.serializeJson(data) as string,
           isRead: false,
           priority: options.priority || template.defaultPriority,
           category: template.category,

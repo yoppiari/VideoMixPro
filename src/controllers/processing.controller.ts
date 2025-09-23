@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper, createPagination } from '@/utils/response';
 import { VideoProcessingService } from '@/services/video-processing.service';
 import { JobStatus, ProjectStatus, TransactionType } from '@/types';
+import { DbHelper } from '@/utils/db-helper';
 import logger from '@/utils/logger';
 import path from 'path';
 import fs from 'fs';
@@ -195,7 +196,7 @@ export class ProcessingController {
             status: JobStatus.PENDING,
             creditsUsed: creditsRequired, // Track credits used for potential refund
             outputCount: outputCount,
-            settings: JSON.stringify(processingSettings), // Store settings for reference
+            settings: DbHelper.serializeJson(processingSettings) as string, // Store settings for reference
             processingMode: isVoiceOverMode ? 'VOICEOVER' : 'NORMAL' // Set processing mode
           }
         });
@@ -344,7 +345,7 @@ export class ProcessingController {
         ...job,
         settings: job.settings ? (() => {
           try {
-            return JSON.parse(job.settings);
+            return DbHelper.deserializeJson(job.settings);
           } catch {
             return {};
           }
@@ -400,7 +401,7 @@ export class ProcessingController {
         ...job,
         settings: job.settings ? (() => {
           try {
-            return JSON.parse(job.settings);
+            return DbHelper.deserializeJson(job.settings);
           } catch {
             return {};
           }

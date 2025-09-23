@@ -7,9 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Base schema with models only (no datasource or generator)
-// This file contains the shared model definitions for both SQLite and PostgreSQL
-
 model User {
   id                 String              @id @default(cuid())
   email              String              @unique
@@ -47,12 +44,10 @@ model Project {
   
   // Relations
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  videoFiles     VideoFile[]
   videos         Video[]
   groups         VideoGroup[]
-  videoGroups    VideoGroup[]
-  voiceOverFiles VoiceOverFile[]
   processingJobs ProcessingJob[]
+  
   @@map("projects")
 }
 
@@ -61,7 +56,7 @@ model Video {
   filename     String
   originalName String    @map("original_name")
   mimeType     String    @map("mime_type")
-  size         BigInt    // BigInt works in both SQLite and PostgreSQL
+  size         BigInt
   duration     Float?
   width        Int?
   height       Int?
@@ -97,61 +92,26 @@ model VideoGroup {
   @@map("video_groups")
 }
 
-model VideoFile {
-  id           String      @id @default(cuid())
-  originalName String      @map("original_name")
-  filename     String
-  path         String
-  size         Int
-  duration     Float
-  format       String
-  resolution   String
-  projectId    String      @map("project_id")
-  groupId      String?     @map("group_id")
-  uploadedAt   DateTime    @default(now()) @map("uploaded_at")
-  group        VideoGroup? @relation(fields: [groupId], references: [id])
-  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("video_files")
-}
-
-model VoiceOverFile {
-  id           String   @id @default(cuid())
-  projectId    String   @map("project_id")
-  originalName String   @map("original_name")
-  filename     String
-  path         String
-  size         Int
-  duration     Float    // Duration in seconds
-  format       String   // mp3, wav, m4a, etc.
-  order        Int      @default(0) // Order for multiple voice overs
-  uploadedAt   DateTime @default(now()) @map("uploaded_at")
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("voice_over_files")
-}
-
 model ProcessingJob {
-  id            String       @id @default(cuid())
-  projectId     String       @map("project_id")
-  userId        String       @map("user_id")
-  status        String       @default("PENDING") // Using String instead of enum for compatibility
-  progress      Int          @default(0)
-  startedAt     DateTime?    @map("started_at")
-  completedAt   DateTime?    @map("completed_at")
-  errorMessage  String?      @map("error_message")
-  creditsUsed   Int          @default(0) @map("credits_used")
-  outputCount   Int          @default(1) @map("output_count")
-  refundedAt    DateTime?    @map("refunded_at")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  settings      String?      @map("settings") // JSON stored as string for compatibility
-  processingMode String      @default("NORMAL") @map("processing_mode") // NORMAL | VOICEOVER
+  id           String                @id @default(cuid())
+  projectId    String                @map("project_id")
+  userId       String                @map("user_id")
+  status       ProcessingJobStatus   @default(PENDING)
+  progress     Int                   @default(0)
+  startedAt    DateTime?             @map("started_at")
+  completedAt  DateTime?             @map("completed_at")
+  errorMessage String?               @map("error_message")
+  creditsUsed  Int                   @default(0) @map("credits_used")
+  outputCount  Int                   @default(0) @map("output_count")
+  refundedAt   DateTime?             @map("refunded_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  settings     Json?
   
   // Relations
-  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outputFiles   OutputFile[]
-  outputs       ProcessedVideo[]
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputs ProcessedVideo[]
+  
   @@map("processing_jobs")
 }
 
@@ -159,14 +119,14 @@ model ProcessedVideo {
   id              String        @id @default(cuid())
   jobId           String        @map("job_id")
   filename        String
-  originalVideoIds String       @map("original_video_ids") // Stored as comma-separated string
+  originalVideoIds String[]     @map("original_video_ids")
   size            BigInt
   duration        Float
   width           Int
   height          Int
   fps             Float
   bitrate         Int
-  settings        String        // JSON stored as string
+  settings        Json
   downloadCount   Int           @default(0) @map("download_count")
   createdAt       DateTime      @default(now()) @map("created_at")
   
@@ -177,13 +137,13 @@ model ProcessedVideo {
 }
 
 model CreditTransaction {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  type        String   // PURCHASE, USAGE, REFUND, BONUS
+  id          String                    @id @default(cuid())
+  userId      String                    @map("user_id")
+  type        CreditTransactionType
   amount      Int
   description String
-  referenceId String?  @map("reference_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+  referenceId String?                   @map("reference_id")
+  createdAt   DateTime                  @default(now()) @map("created_at")
   
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -192,18 +152,41 @@ model CreditTransaction {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String    @map("user_id")
+  id        String            @id @default(cuid())
+  userId    String            @map("user_id")
   title     String
   message   String
-  type      String    @default("INFO") // INFO, SUCCESS, WARNING, ERROR
-  isRead    Boolean   @default(false) @map("is_read")
-  data      String?   // JSON stored as string
-  createdAt DateTime  @default(now()) @map("created_at")
-  readAt    DateTime? @map("read_at")
+  type      NotificationType  @default(INFO)
+  isRead    Boolean           @default(false) @map("is_read")
+  data      Json?
+  createdAt DateTime          @default(now()) @map("created_at")
+  readAt    DateTime?         @map("read_at")
   
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("notifications")
+}
+
+// Enums
+enum ProcessingJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  BONUS
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
 }
