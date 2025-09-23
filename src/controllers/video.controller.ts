@@ -129,7 +129,17 @@ export class VideoController {
         ]
       });
 
-      ResponseHelper.success(res, videos);
+      // Add status field to each video (since VideoFile model doesn't have status field)
+      const videosWithStatus = videos.map(video => ({
+        ...video,
+        status: 'READY', // Default status for all uploaded videos
+        metadata: {
+          static: {},
+          dynamic: {}
+        }
+      }));
+
+      ResponseHelper.success(res, videosWithStatus);
     } catch (error) {
       logger.error('Get project videos error:', error);
       ResponseHelper.serverError(res, 'Failed to get project videos');

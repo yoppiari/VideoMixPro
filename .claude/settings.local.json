@@ -17,7 +17,18 @@
       "Bash(start \"http://localhost:3000/credits\")",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(set PORT=3001)",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -f lavfi -i \"sine=frequency=440:duration=3\" -t 3 test_voiceover_1.mp3 -y)",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -f lavfi -i \"sine=frequency=880:duration=5\" -t 5 test_voiceover_2.mp3 -y)",
+      "Bash(\"C:\\Users\\yoppi\\Downloads\\package-creatorup-1.0.0\\bundle\\ffmpeg\\ffmpeg-2024-10-27-git-bb57b78013-essentials_build\\bin\\ffmpeg.exe\" -f lavfi -i \"sine=frequency=220:duration=4\" -t 4 test_voiceover_3.mp3 -y)",
+      "Bash(npx tsc:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(set PORT=3005)",
+      "Bash(set PORT=3002)",
+      "Bash(start \"http://localhost:3000\")"
     ],
     "deny": [],
     "ask": []

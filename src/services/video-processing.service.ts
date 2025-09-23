@@ -10,6 +10,7 @@ import { AutoMixingService, VideoClip, VideoGroup } from './auto-mixing.service'
 import processingMonitor from './processing-monitor.service';
 import { ErrorHandlingService } from './error-handling.service';
 import { RetryService } from './retry.service';
+import { voiceOverService } from './voice-over.service';
 
 // Set FFmpeg and FFprobe paths
 if (ffmpegStatic) {
@@ -511,6 +512,9 @@ export class VideoProcessingService {
               videoFiles: true
             },
             orderBy: { order: 'asc' }
+          },
+          voiceOverFiles: {
+            orderBy: { order: 'asc' }
           }
         }
       });
@@ -522,24 +526,84 @@ export class VideoProcessingService {
       const settings = data.settings;
       const outputs: string[] = [];
 
+      // Check if this is voice over mode processing
+      const isVoiceOverMode = (settings as any).voiceOverMode === true || (settings as any).audioMode === 'voiceover';
+
       // Start monitoring this job
       const expectedVideoCount = project.videoFiles.length;
       processingMonitor.startMonitoring(jobId, expectedVideoCount, settings);
       processingMonitor.logStage(jobId, 'PROJECT_LOADED', {
         videoCount: expectedVideoCount,
         projectName: project.name,
-        settings
+        settings,
+        isVoiceOverMode,
+        voiceOverCount: project.voiceOverFiles?.length || 0
       });
 
-      // CRITICAL FIX: Pre-generate all variants for "Different Starting Video" feature
-      let preGeneratedVariants: any[] | null = null;
-      if (settings.differentStartingVideo && !settings.groupMixing) {
-        logger.info(`[Pre-Generation] Generating all variants upfront for Different Starting Video feature`);
-        preGeneratedVariants = await this.preGenerateVariants(project, settings, data.outputCount);
-        logger.info(`[Pre-Generation] Generated ${preGeneratedVariants.length} variants for ${data.outputCount} outputs`);
-      }
+      // Voice Over Mode Processing
+      if (isVoiceOverMode) {
+        logger.info(`[Voice Over Mode] Processing ${data.outputCount} outputs with voice over`);
 
-      for (let i = 0; i < data.outputCount; i++) {
+        if (!project.voiceOverFiles || project.voiceOverFiles.length === 0) {
+          throw new Error('Voice over mode requires at least one voice over file');
+        }
+
+        // Assign voice overs to outputs using round-robin
+        const voiceOverAssignments = voiceOverService.assignVoiceOversToOutputs(
+          project.voiceOverFiles,
+          data.outputCount
+        );
+
+        for (let i = 0; i < data.outputCount; i++) {
+          // Check if job was cancelled
+          const jobStatus = await prisma.processingJob.findUnique({
+            where: { id: jobId },
+            select: { status: true }
+          });
+
+          if (!this.activeJobs.get(jobId) || jobStatus?.status === JobStatus.CANCELLED) {
+            logger.info(`Job ${jobId} was cancelled`);
+            return;
+          }
+
+          const progress = Math.round((i / data.outputCount) * 80);
+          const currentOutput = i + 1;
+          const voiceOver = voiceOverAssignments[i];
+
+          await this.updateJobStatusWithDetails(
+            jobId,
+            JobStatus.PROCESSING,
+            progress,
+            `Processing voice over output ${currentOutput}/${data.outputCount}`
+          );
+
+          logger.info(`[Voice Over] Output ${currentOutput}: Using voice over "${voiceOver.originalName}"`);
+
+          // Process video with voice over
+          const outputPath = await this.processVoiceOverOutput(
+            project,
+            voiceOver,
+            settings,
+            i,
+            jobId
+          );
+
+          outputs.push(outputPath);
+
+          // Note: Output files will be saved to database later via saveOutputFiles()
+          // to avoid duplication
+        }
+      } else {
+        // Normal processing mode
+        // CRITICAL FIX: Pre-generate all variants for "Different Starting Video" feature
+        let preGeneratedVariants: any[] | null = null;
+        if (settings.differentStartingVideo && !settings.groupMixing) {
+          logger.info(`[Pre-Generation] Generating all variants upfront for Different Starting Video feature`);
+          preGeneratedVariants = await this.preGenerateVariants(project, settings, data.outputCount);
+          logger.info(`[Pre-Generation] Generated ${preGeneratedVariants.length} variants for ${data.outputCount} outputs`);
+        }
+
+        for (let i = 0; i < data.outputCount; i++) {
         // Check if job was cancelled - check both memory and database
         const jobStatus = await prisma.processingJob.findUnique({
           where: { id: jobId },
@@ -602,6 +666,7 @@ export class VideoProcessingService {
           );
         }
       }
+      } // End of else block (Normal processing mode)
 
       // Save output files to database
       await this.updateJobStatusWithDetails(jobId, JobStatus.PROCESSING, 90, 'Saving output files to database');
@@ -1097,6 +1162,116 @@ export class VideoProcessingService {
     return this.combineVideos(selectedVideos, settings, `manual_mix_${index + 1}`);
   }
 
+  /**
+   * Process a single output with voice over
+   */
+  private async processVoiceOverOutput(
+    project: any,
+    voiceOver: any,
+    settings: any,
+    outputIndex: number,
+    jobId: string
+  ): Promise<string> {
+    try {
+      const timestamp = Date.now();
+      const outputName = `voice_over_output_${outputIndex + 1}_${timestamp}`;
+
+      // Create a variant with different starting video for variety
+      const videos = project.videoFiles;
+      let orderedVideos = [...videos];
+
+      // Rotate videos for different starting points if enabled
+      if (settings.differentStartingVideo && videos.length > 1) {
+        const rotations = outputIndex % videos.length;
+        for (let i = 0; i < rotations; i++) {
+          orderedVideos.push(orderedVideos.shift()!);
+        }
+        logger.info(`[Voice Over] Rotated videos ${rotations} times for output ${outputIndex + 1}`);
+      }
+
+      // First, create the mixed video without voice over
+      const mixedVideoPath = await this.combineVideos(orderedVideos, settings, `temp_${outputName}`);
+
+      // Get durations
+      const videoDuration = await this.getVideoDuration(mixedVideoPath);
+      const voiceDuration = voiceOver.duration;
+
+      logger.info(`[Voice Over] Video duration: ${videoDuration}s, Voice duration: ${voiceDuration}s`);
+
+      // Calculate optimal speed for matching durations
+      const optimalSpeed = voiceOverService.calculateOptimalSpeed(videoDuration, voiceDuration);
+
+      let finalVideoPath = mixedVideoPath;
+
+      // Apply speed adjustment if needed
+      if (Math.abs(optimalSpeed - 1.0) > 0.05) {
+        logger.info(`[Voice Over] Applying speed adjustment: ${optimalSpeed}x`);
+        const speedAdjustedPath = path.join(
+          this.outputDir,
+          `speed_adjusted_${outputName}.mp4`
+        );
+        finalVideoPath = await voiceOverService.applySpeedToVideo(
+          mixedVideoPath,
+          optimalSpeed,
+          speedAdjustedPath
+        );
+
+        // Clean up temp mixed video
+        try {
+          await fs.unlink(mixedVideoPath);
+        } catch (error) {
+          logger.warn(`Failed to delete temp file: ${mixedVideoPath}`);
+        }
+      }
+
+      // Merge video with voice over
+      const outputPath = path.join(
+        this.outputDir,
+        `${outputName}_final.mp4`
+      );
+
+      const mergedPath = await voiceOverService.mergeVideoWithVoiceOver(
+        finalVideoPath,
+        voiceOver.path,
+        outputPath
+      );
+
+      // Clean up intermediate files
+      if (finalVideoPath !== mixedVideoPath) {
+        try {
+          await fs.unlink(finalVideoPath);
+        } catch (error) {
+          logger.warn(`Failed to delete temp file: ${finalVideoPath}`);
+        }
+      }
+
+      logger.info(`[Voice Over] Output ${outputIndex + 1} completed: ${mergedPath}`);
+      return mergedPath;
+    } catch (error) {
+      logger.error(`[Voice Over] Failed to process output ${outputIndex + 1}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get video duration using ffprobe
+   */
+  private async getVideoDuration(videoPath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const ffprobePath = process.env.FFPROBE_PATH || 'ffprobe';
+
+      ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        if (err) {
+          logger.error(`Failed to get video duration for ${videoPath}:`, err);
+          reject(err);
+        } else {
+          const duration = metadata.format?.duration || 0;
+          resolve(duration);
+        }
+      });
+    });
+  }
+
   private async combineVideos(videos: any[], settings: VideoMixingOptions, outputName: string): Promise<string> {
     const timestamp = Date.now();
     const outputPath = path.join(this.outputDir, `${outputName}_${timestamp}.${settings.outputFormat.toLowerCase()}`);
@@ -1346,7 +1521,7 @@ export class VideoProcessingService {
 
   private async saveOutputFiles(jobId: string, outputPaths: string[], settings: any): Promise<void> {
     const outputFiles = await Promise.all(
-      outputPaths.map(async (outputPath) => {
+      outputPaths.map(async (outputPath, index) => {
         const stats = await fs.stat(outputPath);
         const filename = path.basename(outputPath);
 
@@ -1361,19 +1536,35 @@ export class VideoProcessingService {
 
         const duration = metadata.format.duration || 0;
 
+        // Check if this is voice-over mode
+        const isVoiceOverMode = settings.voiceOverMode === 'enabled';
+
+        // Build metadata object
+        const metadataObj: any = {
+          ...(settings.metadata?.static || {}),
+          format: metadata.format.format_name,
+          resolution: `${metadata.streams[0]?.width}x${metadata.streams[0]?.height}`,
+          created_at: new Date().toISOString()
+        };
+
+        // Add voice-over specific metadata if applicable
+        if (isVoiceOverMode && settings.voiceOverFiles && settings.voiceOverFiles[index]) {
+          const voiceOver = settings.voiceOverFiles[index];
+          metadataObj.voiceOverFile = voiceOver.originalName || voiceOver.filename;
+          metadataObj.voiceOverDuration = voiceOver.duration;
+          metadataObj.outputIndex = index;
+        }
+
         return {
           jobId,
           filename,
           path: outputPath,
           size: stats.size,
           duration,
-          metadata: JSON.stringify({
-            ...(settings.metadata?.static || {}),
-            format: metadata.format.format_name,
-            resolution: `${metadata.streams[0]?.width}x${metadata.streams[0]?.height}`,
-            created_at: new Date().toISOString()
-          }),
-          sourceFiles: JSON.stringify([]) // You'd populate this with actual source file info
+          metadata: JSON.stringify(metadataObj),
+          sourceFiles: isVoiceOverMode && settings.voiceOverFiles?.[index]
+            ? JSON.stringify([settings.voiceOverFiles[index].filename])
+            : JSON.stringify([])
         };
       })
     );

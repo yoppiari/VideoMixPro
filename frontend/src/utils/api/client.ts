@@ -259,6 +259,43 @@ class ApiClient {
     const response = await this.client.get(`/v1/groups/project/${projectId}`);
     return response.data;
   }
+
+  // Voice Over endpoints
+  async uploadVoiceOvers(projectId: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('voiceOvers', file);
+    });
+
+    const response = await this.client.post(
+      `/v1/voiceover/projects/${projectId}/voiceovers`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async getProjectVoiceOvers(projectId: string) {
+    const response = await this.client.get(`/v1/voiceover/projects/${projectId}/voiceovers`);
+    return response.data;
+  }
+
+  async deleteVoiceOver(voiceOverId: string) {
+    const response = await this.client.delete(`/v1/voiceover/voiceovers/${voiceOverId}`);
+    return response.data;
+  }
+
+  async updateVoiceOverOrder(projectId: string, orders: { id: string; order: number }[]) {
+    const response = await this.client.put(
+      `/v1/voiceover/projects/${projectId}/voiceovers/order`,
+      { orders }
+    );
+    return response.data;
+  }
 }
 
 const apiClient = new ApiClient();

@@ -45,7 +45,7 @@ interface JobMonitorProps {
 
 const JobMonitor: React.FC<JobMonitorProps> = ({
   projectId,
-  refreshInterval = 5000,
+  refreshInterval = 15000,
   showAllJobs = false,
   onStatsUpdate,
   statusFilter
@@ -53,6 +53,9 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const [activeInterval, setActiveInterval] = useState<NodeJS.Timeout | null>(null);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [downloadInfo, setDownloadInfo] = useState<any>(null);
@@ -62,6 +65,15 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
   const filesPerPage = 20;
 
   const fetchJobs = useCallback(async () => {
+    // Cancel previous request if it exists
+    if (abortController) {
+      abortController.abort();
+    }
+
+    // Create new abort controller for this request
+    const newController = new AbortController();
+    setAbortController(newController);
+
     try {
       setError(null);
       let response;
@@ -102,23 +114,65 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
         };
         onStatsUpdate(stats);
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Don't set error state for aborted requests
+      if (error?.name === 'AbortError') {
+        console.debug('Request was cancelled');
+        return;
+      }
       console.error('Error fetching jobs:', error);
       setError('Failed to fetch jobs');
     } finally {
       setLoading(false);
+      // Clear the abort controller once request is complete
+      setAbortController(null);
     }
-  }, [projectId, showAllJobs]);
+  }, [projectId, showAllJobs, abortController]);
+
+  // Smart polling with visibility API
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   useEffect(() => {
+    // Clear existing interval
+    if (activeInterval) {
+      clearInterval(activeInterval);
+    }
+
+    // Initial fetch
     fetchJobs();
 
+    // Set up smart polling
     const interval = setInterval(() => {
-      fetchJobs();
+      // Only poll if page is visible and component is still mounted
+      if (isPageVisible) {
+        fetchJobs();
+      }
     }, refreshInterval);
 
-    return () => clearInterval(interval);
-  }, [fetchJobs, refreshInterval]);
+    setActiveInterval(interval);
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [fetchJobs, refreshInterval, isPageVisible]);
+
+  // Cleanup on unmount - cancel any pending requests
+  useEffect(() => {
+    return () => {
+      if (abortController) {
+        abortController.abort();
+      }
+    };
+  }, []);
 
   const handleCancelJob = async (jobId: string) => {
     if (!window.confirm('Are you sure you want to cancel this job?')) {

@@ -41,7 +41,8 @@ export interface MixingSettings {
   durationDistributionMode?: 'proportional' | 'equal' | 'weighted';
 
   // Audio
-  audioMode: 'keep' | 'mute';
+  audioMode: 'keep' | 'mute' | 'voiceover';
+  voiceOverMode?: boolean;
 
   // Output
   outputCount: number;
@@ -136,6 +137,7 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
       smartTrimming: false,
       durationDistributionMode: 'proportional',
       audioMode: 'keep',
+      voiceOverMode: false,
       outputCount: 5  // Reduced default to 5 for faster testing
     };
 
@@ -207,7 +209,7 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
     let timeoutId: NodeJS.Timeout;
 
     const calculateCreditEstimate = async () => {
-      if (settings.outputCount < 1) return;
+      if (!settings.outputCount || isNaN(settings.outputCount) || settings.outputCount < 1) return;
       if (!mounted) return;
 
       setCreditEstimate(prev => ({ ...prev, loading: true }));
@@ -391,10 +393,12 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                 type="checkbox"
                 checked={settings.speedMixing}
                 onChange={(e) => handleSettingChange('speedMixing', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                disabled={settings.audioMode === 'voiceover'}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
               />
-              <span className="ml-2 text-sm text-gray-700">
+              <span className={`ml-2 text-sm ${settings.audioMode === 'voiceover' ? 'text-gray-400' : 'text-gray-700'}`}>
                 <strong>Speed Variations</strong> - Apply random playback speeds
+                {settings.audioMode === 'voiceover' && ' (Auto-matched in Voice Over mode)'}
               </span>
             </label>
 
@@ -574,6 +578,11 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Video Duration
           </label>
+          {settings.audioMode === 'voiceover' && (
+            <div className="mb-3 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
+              Duration is automatically matched to voice over files in Voice Over mode
+            </div>
+          )}
           <div className="space-y-3">
             <div className="flex items-center space-x-4">
               <label className="flex items-center">
@@ -594,7 +603,8 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                   value="fixed"
                   checked={settings.durationType === 'fixed'}
                   onChange={(e) => handleSettingChange('durationType', e.target.value)}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
+                  disabled={settings.audioMode === 'voiceover'}
+                  className="mr-2 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-700">Fixed Duration</span>
               </label>
@@ -688,7 +698,10 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                   type="radio"
                   value="keep"
                   checked={settings.audioMode === 'keep'}
-                  onChange={(e) => handleSettingChange('audioMode', e.target.value)}
+                  onChange={(e) => {
+                    handleSettingChange('audioMode', e.target.value);
+                    handleSettingChange('voiceOverMode', false);
+                  }}
                   className="mr-2 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">
@@ -705,7 +718,10 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                   type="radio"
                   value="mute"
                   checked={settings.audioMode === 'mute'}
-                  onChange={(e) => handleSettingChange('audioMode', e.target.value)}
+                  onChange={(e) => {
+                    handleSettingChange('audioMode', e.target.value);
+                    handleSettingChange('voiceOverMode', false);
+                  }}
                   className="mr-2 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">
@@ -718,9 +734,11 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
               </label>
             </div>
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Choose whether to keep original audio or remove all audio from output videos
-          </p>
+          {settings.audioMode !== 'voiceover' && (
+            <p className="mt-2 text-xs text-gray-500">
+              Choose whether to keep original audio or remove all audio from output videos
+            </p>
+          )}
         </div>
       </div>
 
@@ -743,7 +761,25 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
               min="1"
               max={Math.min(variantEstimate, 1000)}
               value={settings.outputCount}
-              onChange={(e) => handleSettingChange('outputCount', parseInt(e.target.value))}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow empty value while typing, or valid numbers
+                if (value === '') {
+                  handleSettingChange('outputCount', '');
+                } else {
+                  const numValue = parseInt(value);
+                  if (!isNaN(numValue) && numValue >= 0) {
+                    handleSettingChange('outputCount', numValue);
+                  }
+                }
+              }}
+              onBlur={(e) => {
+                // Enforce minimum value when user leaves the field
+                const value = parseInt(e.target.value);
+                if (isNaN(value) || value < 1) {
+                  handleSettingChange('outputCount', 1);
+                }
+              }}
               className="w-24 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -767,17 +803,7 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
       )}
 
       {/* Action Buttons */}
-      <div className="flex justify-end space-x-3">
-        <button
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          onClick={() => {
-            // Preview functionality can be added here
-            alert('Preview functionality coming soon!');
-          }}
-        >
-          Preview
-        </button>
-
+      <div className="flex justify-end">
         <div className="flex flex-col items-end">
           {/* Credit Information Display */}
           {creditEstimate.loading ? (
@@ -809,32 +835,44 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
                       {creditEstimate.breakdown?.multipliers ? (
                         <>
                           {creditEstimate.breakdown.multipliers.volume ? (
-                            <div className="flex justify-between text-yellow-300">
-                              <span>Volume multiplier:</span>
-                              <span>x{
-                                typeof creditEstimate.breakdown.multipliers.volume === 'object' && creditEstimate.breakdown.multipliers.volume?.value
+                            <div className="flex justify-between text-green-300">
+                              <span>Volume Discount:</span>
+                              <span>{(() => {
+                                const value = typeof creditEstimate.breakdown.multipliers.volume === 'object' && creditEstimate.breakdown.multipliers.volume?.value
                                   ? creditEstimate.breakdown.multipliers.volume.value
-                                  : creditEstimate.breakdown.multipliers.volume || 1
+                                  : creditEstimate.breakdown.multipliers.volume || 1;
+                                const discount = (1 - value) * 100;
+                                return discount > 0 ? `-${discount.toFixed(0)}%` : 'x' + value;
+                              })()}</span>
+                            </div>
+                          ) : null}
+                          {creditEstimate.breakdown.multipliers.complexity ? (
+                            <div className="flex justify-between text-purple-300">
+                              <span>Complexity Factor:</span>
+                              <span>x{
+                                typeof creditEstimate.breakdown.multipliers.complexity === 'object' && creditEstimate.breakdown.multipliers.complexity?.value
+                                  ? creditEstimate.breakdown.multipliers.complexity.value
+                                  : creditEstimate.breakdown.multipliers.complexity || 1
+                              }</span>
+                            </div>
+                          ) : null}
+                          {creditEstimate.breakdown.multipliers.serverLoad ? (
+                            <div className="flex justify-between text-orange-300">
+                              <span>Server Load:</span>
+                              <span>x{
+                                typeof creditEstimate.breakdown.multipliers.serverLoad === 'object' && creditEstimate.breakdown.multipliers.serverLoad?.value
+                                  ? creditEstimate.breakdown.multipliers.serverLoad.value
+                                  : creditEstimate.breakdown.multipliers.serverLoad || 1
                               }</span>
                             </div>
                           ) : null}
                           {creditEstimate.breakdown.multipliers.quality ? (
                             <div className="flex justify-between text-blue-300">
-                              <span>Quality multiplier:</span>
+                              <span>Quality Settings:</span>
                               <span>x{
                                 typeof creditEstimate.breakdown.multipliers.quality === 'object' && creditEstimate.breakdown.multipliers.quality?.value
                                   ? creditEstimate.breakdown.multipliers.quality.value
                                   : creditEstimate.breakdown.multipliers.quality || 1
-                              }</span>
-                            </div>
-                          ) : null}
-                          {creditEstimate.breakdown.multipliers.complexity ? (
-                            <div className="flex justify-between text-purple-300">
-                              <span>Complexity multiplier:</span>
-                              <span>x{
-                                typeof creditEstimate.breakdown.multipliers.complexity === 'object' && creditEstimate.breakdown.multipliers.complexity?.value
-                                  ? creditEstimate.breakdown.multipliers.complexity.value
-                                  : creditEstimate.breakdown.multipliers.complexity || 1
                               }</span>
                             </div>
                           ) : null}

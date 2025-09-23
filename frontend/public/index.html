@@ -1,14 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <!-- CRITICAL: Extension blocking must be first -->
+    <script>
+      (function() {
+        'use strict';
+        // Ultra-aggressive extension blocking - runs IMMEDIATELY
+        try {
+          // Block MetaMask and all Web3 providers before they can inject
+          const blockProps = ['ethereum', 'web3', 'Web3', 'BinanceChain', 'tronWeb', 'solana', 'phantom', 'coin98', 'trustWallet'];
+          blockProps.forEach(function(prop) {
+            try {
+              Object.defineProperty(window, prop, {
+                value: undefined,
+                writable: false,
+                configurable: false
+              });
+            } catch(e) { /* ignore */ }
+          });
+
+          // Immediate error suppression
+          window.addEventListener('error', function(e) {
+            if (e.error && (e.error.message.includes('MetaMask') || e.error.message.includes('ethereum') ||
+                           e.filename && e.filename.includes('chrome-extension'))) {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }
+          }, true); // Use capture phase
+
+          console.log('[VideoMix Pro] AGGRESSIVE extension blocking active');
+        } catch(e) {
+          console.debug('[VideoMix Pro] Extension blocking error handled');
+        }
+      })();
+    </script>
+
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="VideoMix Pro - Professional video mixing and processing platform"
     />
+    <!-- Enhanced security to prevent browser extension injection -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'; connect-src 'self' http://localhost:* ws://localhost:*; style-src 'self' 'unsafe-inline';" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
@@ -24,11 +61,112 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>React App</title>
+    <title>VideoMix Pro</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+
+    <!-- Early extension blocking script - runs before React -->
+    <script>
+      (function() {
+        'use strict';
+
+        // Block MetaMask and other Web3 extensions immediately
+        try {
+          // Override window.ethereum to prevent extension injection
+          if (typeof window !== 'undefined') {
+            Object.defineProperty(window, 'ethereum', {
+              value: undefined,
+              writable: false,
+              configurable: false
+            });
+
+            // Block common Web3 provider injections
+            ['web3', 'Web3', 'ethereum', 'BinanceChain', 'tronWeb'].forEach(function(prop) {
+              Object.defineProperty(window, prop, {
+                value: undefined,
+                writable: false,
+                configurable: false
+              });
+            });
+
+            console.log('[VideoMix Pro] Extension injection blocked successfully');
+          }
+        } catch (e) {
+          console.debug('[VideoMix Pro] Extension blocking error handled:', e.message);
+        }
+
+        // Add global error suppression for extension-related errors
+        window.addEventListener('error', function(event) {
+          if (event.error && (
+            event.error.message.includes('MetaMask') ||
+            event.error.message.includes('ethereum') ||
+            event.filename && event.filename.includes('chrome-extension')
+          )) {
+            event.preventDefault();
+            event.stopPropagation();
+            console.debug('[VideoMix Pro] Extension error suppressed');
+            return false;
+          }
+        });
+
+        // Block unhandled promise rejections from extensions
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event.reason && (
+            event.reason.message && event.reason.message.includes('MetaMask') ||
+            event.reason.toString().includes('ethereum')
+          )) {
+            event.preventDefault();
+            console.debug('[VideoMix Pro] Extension promise rejection suppressed');
+          }
+        });
+      })();
+    </script>
+
+    <div id="root">
+      <!-- Loading skeleton while app initializes -->
+      <div id="initial-loader" style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background-color: #f9fafb;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      ">
+        <div style="
+          width: 48px;
+          height: 48px;
+          background-color: #3b82f6;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 16px;
+        ">
+          <span style="color: white; font-weight: bold; font-size: 20px;">VM</span>
+        </div>
+        <div style="
+          width: 40px;
+          height: 40px;
+          border: 3px solid #e5e7eb;
+          border-top: 3px solid #3b82f6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        "></div>
+        <p style="
+          margin-top: 16px;
+          color: #6b7280;
+          font-size: 14px;
+        ">Loading VideoMix Pro...</p>
+      </div>
+      <style>
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    </div>
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

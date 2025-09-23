@@ -5,6 +5,8 @@ import VideoGallery from '../videos/VideoGallery';
 import VideoUpload from '../videos/VideoUpload';
 import JobMonitor from '../processing/JobMonitor';
 import ProcessingSettings, { MixingSettings } from '../processing/ProcessingSettings';
+import VoiceOverUpload from '../processing/VoiceOverUpload';
+import VoiceOverMode from '../processing/VoiceOverMode';
 import { VideoGroupManager } from '../groups/VideoGroupManager';
 import apiClient from '../../utils/api/client';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -48,9 +50,12 @@ interface Project {
       includeDynamic: boolean;
       fields: string[];
     };
-    groups: Group[];
+    groups?: Group[];
   };
-  videoCount: number;
+  videoCount?: number;
+  videoFiles?: any[];
+  videoGroups?: Group[];
+  processingJobs?: any[];
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +73,24 @@ const ProjectDetail: React.FC = () => {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [mixingSettings, setMixingSettings] = useState<MixingSettings | null>(null);
+  const [voiceOverFiles, setVoiceOverFiles] = useState<any[]>([]);
+
+  // Edit form states
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    description: '',
+    metadata: {
+      static: {} as Record<string, string>,
+      includeDynamic: true,
+      fields: [] as string[]
+    }
+  });
+  const [staticFields, setStaticFields] = useState<Array<{key: string, value: string}>>([]);
+  const [dynamicFields, setDynamicFields] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Load project details
   const loadProject = async () => {
@@ -92,7 +115,24 @@ const ProjectDetail: React.FC = () => {
       }
 
       if (videosResponse.success) {
-        setVideos(videosResponse.data || []);
+        const videosData = videosResponse.data || [];
+        console.log('[ProjectDetail] Videos loaded:', videosData.length, 'videos');
+
+        // Ensure videos have status field
+        const videosWithStatus = videosData.map((video: any) => ({
+          ...video,
+          status: video.status || 'READY', // Default to READY if no status
+          metadata: video.metadata || { static: {}, dynamic: {} }
+        }));
+
+        setVideos(videosWithStatus);
+        console.log('[ProjectDetail] Video statuses:', videosWithStatus.map((v: any) => ({
+          name: v.originalName,
+          status: v.status
+        })));
+      } else {
+        console.warn('[ProjectDetail] Failed to load videos:', videosResponse.error);
+        setVideos([]); // Set empty array on error
       }
     } catch (error) {
       console.error('Error loading project:', error);
@@ -120,6 +160,30 @@ const ProjectDetail: React.FC = () => {
   useEffect(() => {
     loadProject();
   }, [id]);
+
+  // Initialize edit form when project loads or when entering edit mode
+  useEffect(() => {
+    if (project && activeTab === 'settings') {
+      setEditFormData({
+        name: project.name || '',
+        description: project.description || '',
+        metadata: {
+          static: project.settings?.metadata?.static || {},
+          includeDynamic: project.settings?.metadata?.includeDynamic || false,
+          fields: project.settings?.metadata?.fields || []
+        }
+      });
+
+      // Convert static metadata to array format for editing
+      const staticArray = Object.entries(project.settings?.metadata?.static || {})
+        .map(([key, value]) => ({ key, value: value as string }));
+      setStaticFields(staticArray.length > 0 ? staticArray : [{ key: '', value: '' }]);
+
+      // Set dynamic fields
+      const dynamicArray = project.settings?.metadata?.fields || [];
+      setDynamicFields(dynamicArray.length > 0 ? dynamicArray : ['']);
+    }
+  }, [project, activeTab]);
 
   // Utility functions
   const formatDate = (dateString: string) => {
@@ -180,9 +244,121 @@ const ProjectDetail: React.FC = () => {
     setSelectedVideos(new Set());
   };
 
+  // Edit form handlers
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleMetadataCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { checked } = e.target;
+    setEditFormData(prev => ({
+      ...prev,
+      metadata: {
+        ...prev.metadata,
+        includeDynamic: checked
+      }
+    }));
+  };
+
+  // Static metadata handlers
+  const addStaticField = () => {
+    setStaticFields([...staticFields, { key: '', value: '' }]);
+  };
+
+  const removeStaticField = (index: number) => {
+    setStaticFields(staticFields.filter((_, i) => i !== index));
+  };
+
+  const updateStaticField = (index: number, field: 'key' | 'value', value: string) => {
+    const updated = [...staticFields];
+    updated[index][field] = value;
+    setStaticFields(updated);
+  };
+
+  // Dynamic metadata handlers
+  const addDynamicField = () => {
+    setDynamicFields([...dynamicFields, '']);
+  };
+
+  const removeDynamicField = (index: number) => {
+    setDynamicFields(dynamicFields.filter((_, i) => i !== index));
+  };
+
+  const updateDynamicField = (index: number, value: string) => {
+    const updated = [...dynamicFields];
+    updated[index] = value;
+    setDynamicFields(updated);
+  };
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      // Prepare metadata
+      const staticMetadata = staticFields
+        .filter(field => field.key.trim() && field.value.trim())
+        .reduce((acc, field) => ({ ...acc, [field.key]: field.value }), {});
+
+      const dynamicMetadataFields = dynamicFields.filter(field => field.trim());
+
+      // Prepare update data
+      const updateData = {
+        name: editFormData.name,
+        description: editFormData.description,
+        settings: {
+          ...(project?.settings || {}),
+          metadata: {
+            static: staticMetadata,
+            includeDynamic: editFormData.metadata.includeDynamic,
+            fields: dynamicMetadataFields
+          }
+        }
+      };
+
+      const response = await apiClient.updateProject(id!, updateData);
+
+      if (response.success) {
+        setSaveSuccess(true);
+        setIsEditingSettings(false);
+        loadProject(); // Reload project data
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setSaveError(response.error || 'Failed to save changes');
+      }
+    } catch (error: any) {
+      setSaveError(error.message || 'An error occurred while saving');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingSettings(false);
+    setSaveError(null);
+    // Reset form to original data
+    if (project) {
+      setEditFormData({
+        name: project.name || '',
+        description: project.description || '',
+        metadata: {
+          static: project.settings?.metadata?.static || {},
+          includeDynamic: project.settings?.metadata?.includeDynamic || false,
+          fields: project.settings?.metadata?.fields || []
+        }
+      });
+    }
+  };
+
   // Project actions
   const handleEditProject = () => {
-    navigate(`/projects/${id}/edit`);
+    setActiveTab('settings'); // Navigate to settings tab instead of edit route
+    setIsEditingSettings(true);
   };
 
   const handleDeleteProject = async () => {
@@ -244,6 +420,15 @@ const ProjectDetail: React.FC = () => {
     if (videos.length < 2) {
       alert('Minimum 2 videos required for mixing');
       return;
+    }
+
+    // Check for voice over files if voice over mode is enabled
+    if (mixingSettings.audioMode === 'voiceover') {
+      if (!voiceOverFiles || voiceOverFiles.length === 0) {
+        alert('Please upload at least one voice over file to use Voice Over mode');
+        return;
+      }
+      console.log('[ProjectDetail] Voice Over mode active with', voiceOverFiles.length, 'files');
     }
 
     // Log settings summary for debugging
@@ -410,12 +595,6 @@ const ProjectDetail: React.FC = () => {
                 Edit
               </button>
               <button
-                onClick={handleStartProcessing}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-              >
-                Start Processing
-              </button>
-              <button
                 onClick={handleDeleteProject}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
               >
@@ -477,7 +656,7 @@ const ProjectDetail: React.FC = () => {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-600">
-                      {project.settings.groups?.length || 0}
+                      {project.videoGroups?.length || project.settings?.groups?.length || 0}
                     </div>
                     <div className="text-sm text-gray-500">Groups</div>
                   </div>
@@ -805,6 +984,37 @@ const ProjectDetail: React.FC = () => {
               </Suspense>
             </ErrorBoundary>
 
+            {/* Voice Over Mode - Separate Card */}
+            <VoiceOverMode
+              isEnabled={mixingSettings?.audioMode === 'voiceover' || false}
+              onToggle={(enabled) => {
+                if (enabled) {
+                  setMixingSettings(prev => ({
+                    ...prev!,
+                    audioMode: 'voiceover',
+                    voiceOverMode: true,
+                    durationType: 'original',
+                    speedMixing: false
+                  }));
+                } else {
+                  setMixingSettings(prev => ({
+                    ...prev!,
+                    audioMode: 'keep',
+                    voiceOverMode: false
+                  }));
+                }
+              }}
+            />
+
+            {/* Voice Over Upload - shown when voice over mode is enabled */}
+            {mixingSettings?.audioMode === 'voiceover' && (
+              <VoiceOverUpload
+                projectId={id!}
+                onVoiceOversChange={setVoiceOverFiles}
+                isEnabled={mixingSettings.audioMode === 'voiceover'}
+              />
+            )}
+
             {/* Job Monitor with Error Boundary */}
             {(project.status === 'PROCESSING' || project.status === 'COMPLETED') && (
               <div className="mt-6">
@@ -819,7 +1029,7 @@ const ProjectDetail: React.FC = () => {
                 >
                   <JobMonitor
                     projectId={project.id}
-                    refreshInterval={project.status === 'PROCESSING' ? 2000 : 10000}
+                    refreshInterval={project.status === 'PROCESSING' ? 15000 : 30000}
                   />
                 </ErrorBoundary>
               </div>
@@ -828,46 +1038,200 @@ const ProjectDetail: React.FC = () => {
         )}
 
         {activeTab === 'settings' && (
-          <div>
+          <div className="space-y-6">
+            {/* Success Message */}
+            {saveSuccess && (
+              <div className="bg-green-50 border-l-4 border-green-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-green-700">Project settings saved successfully!</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {saveError && (
+              <div className="bg-red-50 border-l-4 border-red-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{saveError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Basic Information */}
             <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Metadata Settings</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Include Dynamic Metadata</h4>
-                  <p className="text-sm text-gray-900">
-                    {project.settings.metadata.includeDynamic ? 'Yes' : 'No'}
-                  </p>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                    Project Name
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={editFormData.name}
+                    onChange={handleEditInputChange}
+                    disabled={isSaving}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  />
                 </div>
 
-                {Object.keys(project.settings.metadata.static).length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Static Metadata</h4>
-                    <div className="space-y-2">
-                      {Object.entries(project.settings.metadata.static).map(([key, value]) => (
-                        <div key={key} className="flex justify-between text-sm">
-                          <span className="text-gray-600">{key}:</span>
-                          <span className="text-gray-900">{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    rows={3}
+                    value={editFormData.description}
+                    onChange={handleEditInputChange}
+                    disabled={isSaving}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  />
+                </div>
+              </div>
+            </div>
 
-                {project.settings.metadata.fields.length > 0 && (
+            {/* Metadata Settings */}
+            <div className="bg-white shadow rounded-lg p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Metadata Settings</h3>
+
+              {/* Static Metadata */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-medium text-gray-800">Static Metadata</h4>
+                  <button
+                    type="button"
+                    onClick={addStaticField}
+                    disabled={isSaving}
+                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    Add Field
+                  </button>
+                </div>
+
+                {staticFields.map((field, index) => (
+                  <div key={index} className="flex items-center space-x-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Key"
+                      value={field.key}
+                      onChange={(e) => updateStaticField(index, 'key', e.target.value)}
+                      disabled={isSaving}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Value"
+                      value={field.value}
+                      onChange={(e) => updateStaticField(index, 'value', e.target.value)}
+                      disabled={isSaving}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeStaticField(index)}
+                      disabled={isSaving}
+                      className="text-red-600 hover:text-red-800 disabled:text-gray-400"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dynamic Metadata */}
+              <div>
+                <div className="flex items-center mb-3">
+                  <input
+                    type="checkbox"
+                    id="includeDynamic"
+                    checked={editFormData.metadata.includeDynamic}
+                    onChange={handleMetadataCheckboxChange}
+                    disabled={isSaving}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  />
+                  <label htmlFor="includeDynamic" className="ml-2 text-sm font-medium text-gray-700">
+                    Include Dynamic Metadata
+                  </label>
+                </div>
+
+                {editFormData.metadata.includeDynamic && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Dynamic Fields</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {project.settings.metadata.fields.map((field, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded"
-                        >
-                          {field}
-                        </span>
-                      ))}
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-md font-medium text-gray-800">Dynamic Fields</h4>
+                      <button
+                        type="button"
+                        onClick={addDynamicField}
+                        disabled={isSaving}
+                        className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                      >
+                        Add Field
+                      </button>
                     </div>
+
+                    {dynamicFields.map((field, index) => (
+                      <div key={index} className="flex items-center space-x-2 mb-2">
+                        <input
+                          type="text"
+                          placeholder="Field name"
+                          value={field}
+                          onChange={(e) => updateDynamicField(index, e.target.value)}
+                          disabled={isSaving}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeDynamicField(index)}
+                          disabled={isSaving}
+                          className="text-red-600 hover:text-red-800 disabled:text-gray-400"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                  className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving}
+                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </div>
           </div>

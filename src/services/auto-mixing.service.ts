@@ -531,43 +531,44 @@ export class AutoMixingService {
           });
         }
       } else {
-        // Original nested loop logic when we have fewer orders than outputs
-        for (const order of orders) {
-          for (const speeds of speedCombos) {
-            // CRITICAL: Force disable transitions and colors completely for stability
-            const transitions: string[] = [];
-            const colorAdjustments = { brightness: 0, contrast: 1, saturation: 1, hue: 0 };
+        // When we have fewer orders than outputs, create variants by pairing orders with speeds
+        // IMPORTANT: Only create exactly the number of outputs requested
+        let variantIndex = 0;
 
-            // Override settings to ensure stability
-            const stableSettings = {
-              ...settings,
-              transitionMixing: false,
-              colorVariations: false,
-              transitionTypes: [],
-              transitionDuration: { min: 0, max: 0 },
-              colorIntensity: 'low' as const
-            };
+        while (variants.length < settings.outputCount && variantIndex < Math.max(orders.length, speedCombos.length)) {
+          // Use modulo to cycle through orders and speeds if needed
+          const order = orders[variantIndex % orders.length];
+          const speeds = speedCombos[variantIndex % speedCombos.length];
 
-            logger.info(`[Variant Generation] Transitions DISABLED for variant ${variantId}`);
+          // CRITICAL: Force disable transitions and colors completely for stability
+          const transitions: string[] = [];
+          const colorAdjustments = { brightness: 0, contrast: 1, saturation: 1, hue: 0 };
 
-            variants.push({
-              id: `variant-${variantId++}`,
-              videoOrder: order,
-              speeds,
-              transitions,
-              colorAdjustments,
-              settings: stableSettings
-            });
+          // Override settings to ensure stability
+          const stableSettings = {
+            ...settings,
+            transitionMixing: false,
+            colorVariations: false,
+            transitionTypes: [],
+            transitionDuration: { min: 0, max: 0 },
+            colorIntensity: 'low' as const
+          };
 
-            // Stop if we've generated enough variants
-            if (variants.length >= settings.outputCount) {
-              break;
-            }
-          }
-          if (variants.length >= settings.outputCount) {
-            break;
-          }
+          logger.info(`[Variant Generation] Creating variant ${variantId} (${variants.length + 1}/${settings.outputCount})`);
+
+          variants.push({
+            id: `variant-${variantId++}`,
+            videoOrder: order,
+            speeds,
+            transitions,
+            colorAdjustments,
+            settings: stableSettings
+          });
+
+          variantIndex++;
         }
+
+        logger.info(`[Variant Generation] Created exactly ${variants.length} variants as requested`);
       }
 
       // Select variants ensuring different starting videos when enabled
@@ -636,6 +637,13 @@ export class AutoMixingService {
         }
       }
 
+      // FINAL SAFEGUARD: Ensure we never return more variants than requested
+      if (variants.length > settings.outputCount) {
+        logger.warn(`[Variant Generation] Trimming variants from ${variants.length} to ${settings.outputCount}`);
+        return variants.slice(0, settings.outputCount);
+      }
+
+      logger.info(`[Variant Generation] Returning ${variants.length} variants (requested: ${settings.outputCount})`);
       return variants;
     } catch (error) {
       logger.error('Error generating variants:', error);

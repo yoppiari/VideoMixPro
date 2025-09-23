@@ -29,6 +29,23 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // Check if this is an extension-related error
+    const isExtensionError = error.message?.includes('MetaMask') ||
+                            error.message?.includes('ethereum') ||
+                            error.message?.includes('chrome-extension') ||
+                            error.stack?.includes('chrome-extension');
+
+    if (isExtensionError) {
+      console.debug('[VideoMix Pro] Extension error caught by boundary:', error.message);
+      // Don't show error UI for extension conflicts, just continue normally
+      return {
+        hasError: false,
+        error: null,
+        errorInfo: null,
+        errorCount: 0
+      };
+    }
+
     console.error('[ErrorBoundary] Error caught:', error);
 
     // Log detailed error info
@@ -51,6 +68,20 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     const { onError, name } = this.props;
+
+    // Check if this is an extension-related error
+    const isExtensionError = error.message?.includes('MetaMask') ||
+                            error.message?.includes('ethereum') ||
+                            error.message?.includes('chrome-extension') ||
+                            error.stack?.includes('chrome-extension');
+
+    if (isExtensionError) {
+      console.debug('[VideoMix Pro] Extension error suppressed in componentDidCatch');
+      // Increment error counter for tracking
+      (window as any).__extensionErrorCount = ((window as any).__extensionErrorCount || 0) + 1;
+      // Don't set error state, continue normal operation
+      return;
+    }
 
     console.error(`[ErrorBoundary${name ? ` - ${name}` : ''}] componentDidCatch:`, {
       error: error,

@@ -14,6 +14,7 @@ import paymentRoutes from '@/routes/payment.routes';
 import adminRoutes from '@/routes/admin.routes';
 import healthRoutes from '@/routes/health';
 import groupRoutes from '@/routes/group.routes';
+import voiceOverRoutes from '@/routes/voice-over.routes';
 
 // Production services
 import {
@@ -52,6 +53,7 @@ app.use('/api/v1/projects', projectRoutes);
 app.use('/api/v1/videos', videoRoutes);
 app.use('/api/v1/groups', groupRoutes);
 app.use('/api/v1/processing', processingRoutes);
+app.use('/api/v1/voiceover', voiceOverRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 

@@ -29,7 +29,8 @@ export class ProcessingController {
           videoFiles: true,
           videoGroups: {
             include: { videoFiles: true }
-          }
+          },
+          voiceOverFiles: true // Include voice over files
         }
       });
 
@@ -71,6 +72,18 @@ export class ProcessingController {
       if (isNaN(outputCount)) {
         ResponseHelper.error(res, 'Output count must be a valid number', 400);
         return;
+      }
+
+      // Check if voice over mode is enabled
+      const isVoiceOverMode = mixingSettings.audioMode === 'voiceover' || mixingSettings.voiceOverMode === true;
+
+      // Validate voice over requirements
+      if (isVoiceOverMode) {
+        if (!project.voiceOverFiles || project.voiceOverFiles.length === 0) {
+          ResponseHelper.error(res, 'Voice over mode requires at least one voice over file to be uploaded', 400);
+          return;
+        }
+        logger.info(`[Voice Over Mode] Processing with ${project.voiceOverFiles.length} voice over files`);
       }
 
       // Sanitize settings with safe defaults (removing problematic properties)
@@ -125,7 +138,8 @@ export class ProcessingController {
         durationDistributionMode: ['proportional', 'equal', 'weighted'].includes(mixingSettings.durationDistributionMode)
           ? mixingSettings.durationDistributionMode
           : 'proportional',
-        audioMode: mixingSettings.audioMode === 'mute' ? 'mute' : 'keep',
+        audioMode: isVoiceOverMode ? 'voiceover' : (mixingSettings.audioMode === 'mute' ? 'mute' : 'keep'),
+        voiceOverMode: isVoiceOverMode,
 
         // Force removed features to safe defaults
         transitionMixing: false,
@@ -181,7 +195,8 @@ export class ProcessingController {
             status: JobStatus.PENDING,
             creditsUsed: creditsRequired, // Track credits used for potential refund
             outputCount: outputCount,
-            settings: JSON.stringify(processingSettings) // Store settings for reference
+            settings: JSON.stringify(processingSettings), // Store settings for reference
+            processingMode: isVoiceOverMode ? 'VOICEOVER' : 'NORMAL' // Set processing mode
           }
         });
 
@@ -801,19 +816,28 @@ export class ProcessingController {
     const qualityMultiplier = this.getQualityMultiplier(settings);
 
     // Mixing complexity multipliers
-    const mixingMultiplier = this.getMixingComplexityMultiplier(settings);
+    const complexityMultiplier = this.getMixingComplexityMultiplier(settings, outputCount);
+
+    // Server load multiplier (protects against extreme load scenarios)
+    const serverLoadMultiplier = this.getServerLoadMultiplier(outputCount);
 
     // Apply all multipliers
-    const totalCredits = baseCredits * volumeMultiplier * qualityMultiplier * mixingMultiplier;
+    const totalCredits = baseCredits * volumeMultiplier * qualityMultiplier * complexityMultiplier * serverLoadMultiplier;
 
     return Math.ceil(totalCredits);
   }
 
   private getVolumeMultiplier(outputCount: number): number {
-    if (outputCount <= 5) return 1.0;        // 1-5 videos: no penalty
-    if (outputCount <= 10) return 1.5;       // 6-10 videos: 1.5x cost
-    if (outputCount <= 20) return 2.0;       // 11-20 videos: 2x cost
-    return 3.0;                              // 21+ videos: 3x cost
+    // Volume discount system - batch besar mendapat diskon
+    // Namun ada limit untuk proteksi server pada volume sangat tinggi
+    if (outputCount <= 5) return 1.0;         // 1-5 videos: base price
+    if (outputCount <= 10) return 0.95;       // 6-10 videos: 5% discount
+    if (outputCount <= 25) return 0.90;       // 11-25 videos: 10% discount
+    if (outputCount <= 50) return 0.85;       // 26-50 videos: 15% discount
+    if (outputCount <= 100) return 0.82;      // 51-100 videos: 18% discount
+    if (outputCount <= 200) return 0.80;      // 101-200 videos: 20% discount (max discount)
+    if (outputCount <= 500) return 0.85;      // 201-500 videos: 15% discount (server protection)
+    return 0.90;                              // 500+ videos: 10% discount (heavy server load)
   }
 
   private getQualityMultiplier(settings: any): number {
@@ -846,47 +870,64 @@ export class ProcessingController {
     return multiplier;
   }
 
-  private getMixingComplexityMultiplier(settings: any): number {
-    let complexityScore = 0;
+  private getMixingComplexityMultiplier(settings: any, outputCount: number): number {
+    // Calculate complexity based on server resource consumption
+    let complexityScore = 1.0; // Base complexity
 
-    // Count enabled mixing options (anti-fingerprinting features)
-    if (settings.orderMixing !== false) complexityScore += 1;           // Order mixing
-    if (settings.speedVariations) complexityScore += 1;                 // Speed variations
-    if (settings.differentStartingVideo) complexityScore += 1;          // Different starting video
-    if (settings.groupMixing) complexityScore += 1;                     // Group-based mixing
-    if (settings.transitionVariations) complexityScore += 1;            // Transition variations
-    if (settings.colorVariations) complexityScore += 1;                 // Color variations
+    // Add server load impact for each feature
+    // Values represent actual server resource consumption
+    if (settings.orderMixing !== false) complexityScore += 0.2;        // Memory for permutations
+    if (settings.speedVariations || settings.speedMixing) complexityScore += 0.5;  // FFmpeg filter complexity
+    if (settings.differentStartingVideo) complexityScore += 0.2;       // Additional logic processing
+    if (settings.groupMixing) complexityScore += 0.3;                 // Sorting/organizing overhead
+    if (settings.transitionVariations) complexityScore += 0.4;        // Video filter processing
+    if (settings.colorVariations) complexityScore += 0.3;             // Color processing overhead
+    if (settings.smartTrimming) complexityScore += 0.3;               // Duration calculation complexity
 
-    // Complexity multipliers based on anti-fingerprinting strength
-    switch (complexityScore) {
-      case 0: return 0.5;  // No variations: 0.5x (basic processing)
-      case 1: return 0.8;  // Weak: 0.8x
-      case 2: return 1.0;  // Fair: 1.0x (base cost)
-      case 3: return 1.2;  // Good: 1.2x
-      case 4: return 1.5;  // Strong: 1.5x
-      case 5: return 1.8;  // Very Strong: 1.8x
-      case 6: return 2.2;  // Maximum: 2.2x (all features enabled)
-      default: return 1.0;
+    // Voice over mode has highest server impact (audio processing is CPU intensive)
+    if (settings.audioMode === 'voiceover' || settings.voiceOverMode) {
+      complexityScore += 0.8;
     }
+
+    // Apply server load multiplier for high volume + high complexity combinations
+    const loadScore = outputCount * complexityScore;
+    if (loadScore > 500) {
+      // For extremely heavy loads, add additional cost
+      complexityScore *= 1.2;
+    }
+
+    return complexityScore;
+  }
+
+  private getServerLoadMultiplier(outputCount: number): number {
+    // Server protection for extreme volumes
+    // Only applies to very large batches that strain server resources
+    if (outputCount <= 200) return 1.0;    // Normal operation
+    if (outputCount <= 500) return 1.06;   // 201-500: Small surcharge for server load
+    if (outputCount <= 1000) return 1.12;  // 501-1000: Moderate surcharge
+    return 1.25;                           // 1000+: Significant surcharge for extreme load
   }
 
   private getCreditBreakdown(outputCount: number, settings: any): any {
     const baseCredits = outputCount;
     const volumeMultiplier = this.getVolumeMultiplier(outputCount);
     const qualityMultiplier = this.getQualityMultiplier(settings);
-    const mixingMultiplier = this.getMixingComplexityMultiplier(settings);
+    const complexityMultiplier = this.getMixingComplexityMultiplier(settings, outputCount);
+    const serverLoadMultiplier = this.getServerLoadMultiplier(outputCount);
 
     // Calculate step-by-step costs
     const afterVolume = baseCredits * volumeMultiplier;
     const afterQuality = afterVolume * qualityMultiplier;
-    const totalCredits = afterQuality * mixingMultiplier;
+    const afterComplexity = afterQuality * complexityMultiplier;
+    const totalCredits = afterComplexity * serverLoadMultiplier;
 
     // Get anti-fingerprinting strength
     let complexityScore = 0;
     const enabledFeatures = [];
 
+    if (settings.audioMode === 'voiceover' || settings.voiceOverMode) { enabledFeatures.push('Voice Over Processing'); }
     if (settings.orderMixing !== false) { complexityScore += 1; enabledFeatures.push('Order Mixing'); }
-    if (settings.speedVariations) { complexityScore += 1; enabledFeatures.push('Speed Variations'); }
+    if (settings.speedVariations || settings.speedMixing) { complexityScore += 1; enabledFeatures.push('Speed Variations'); }
     if (settings.differentStartingVideo) { complexityScore += 1; enabledFeatures.push('Different Starting Video'); }
     if (settings.groupMixing) { complexityScore += 1; enabledFeatures.push('Group-Based Mixing'); }
     if (settings.transitionVariations) { complexityScore += 1; enabledFeatures.push('Transition Variations'); }
@@ -899,23 +940,28 @@ export class ProcessingController {
       baseCredits,
       outputCount,
       multipliers: {
-        volume: {
+        volume: volumeMultiplier !== 1 ? {
           value: volumeMultiplier,
           reason: this.getVolumeReason(outputCount)
-        },
-        quality: {
+        } : undefined,
+        quality: qualityMultiplier !== 1 ? {
           value: qualityMultiplier,
           reason: this.getQualityReason(settings)
-        },
-        mixing: {
-          value: mixingMultiplier,
+        } : undefined,
+        complexity: complexityMultiplier !== 1 ? {
+          value: complexityMultiplier,
           reason: `${strengthLevel} anti-fingerprinting (${complexityScore}/6 features)`
-        }
+        } : undefined,
+        serverLoad: serverLoadMultiplier !== 1 ? {
+          value: serverLoadMultiplier,
+          reason: this.getServerLoadReason(outputCount)
+        } : undefined
       },
       steps: {
         base: baseCredits,
         afterVolume: Math.ceil(afterVolume),
         afterQuality: Math.ceil(afterQuality),
+        afterComplexity: Math.ceil(afterComplexity),
         final: Math.ceil(totalCredits)
       },
       enabledFeatures,
@@ -924,10 +970,21 @@ export class ProcessingController {
   }
 
   private getVolumeReason(outputCount: number): string {
-    if (outputCount <= 5) return '1-5 videos: No volume penalty';
-    if (outputCount <= 10) return '6-10 videos: 1.5x volume penalty';
-    if (outputCount <= 20) return '11-20 videos: 2x volume penalty';
-    return '21+ videos: 3x volume penalty';
+    if (outputCount <= 5) return 'Small batch: standard pricing';
+    if (outputCount <= 10) return 'Small bulk: 5% volume discount';
+    if (outputCount <= 25) return 'Medium bulk: 10% volume discount';
+    if (outputCount <= 50) return 'Large bulk: 15% volume discount';
+    if (outputCount <= 100) return 'Very large bulk: 18% volume discount';
+    if (outputCount <= 200) return 'Massive bulk: 20% volume discount (max discount)';
+    if (outputCount <= 500) return 'Server-intensive: 15% discount (server protection)';
+    return 'Extreme volume: 10% discount (heavy server load)';
+  }
+
+  private getServerLoadReason(outputCount: number): string {
+    if (outputCount <= 200) return 'Normal server operation';
+    if (outputCount <= 500) return 'Moderate server load: 6% surcharge';
+    if (outputCount <= 1000) return 'High server load: 12% surcharge';
+    return 'Extreme server load: 25% surcharge (protection)';
   }
 
   private getQualityReason(settings: any): string {

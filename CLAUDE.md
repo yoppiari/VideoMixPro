@@ -310,13 +310,52 @@ npx kill-port 3000           # Restart frontend
 - `src/services/video-processing.service.ts` - Include job ID in refund transactions
 - `frontend/src/components/credits/CreditUsageDisplay.tsx` - Complete UI overhaul
 
+## 💰 Credit System Redesign (2025-09-23)
+
+### New Volume-Based Pricing System:
+Redesigned credit calculation to encourage large batch processing while protecting server resources:
+
+1. **Volume Discount Tiers**:
+   - 1-5 videos: Base price (no discount)
+   - 6-10 videos: 5% discount
+   - 11-25 videos: 10% discount
+   - 26-50 videos: 15% discount
+   - 51-100 videos: 18% discount
+   - 101-200 videos: 20% discount (maximum discount)
+   - 201-500 videos: 15% discount (server protection kicks in)
+   - 500+ videos: 10% discount (heavy server load)
+
+2. **Server Load Protection**:
+   - Added separate multiplier for extreme volumes (>200 outputs)
+   - Prevents server overload while still allowing large batches
+   - Balances user value with infrastructure sustainability
+
+3. **Complexity Multipliers**:
+   - Order Mixing: +0.2x (memory for permutations)
+   - Speed Variations: +0.5x (FFmpeg filter complexity)
+   - Different Starting Video: +0.2x (additional logic)
+   - Group Mixing: +0.3x (sorting/organizing overhead)
+   - Voice Over Mode: +0.8x (CPU-intensive audio processing)
+
+4. **UI Improvements**:
+   - Fixed Generate Count input field - no more sticky digits
+   - Improved onChange/onBlur handling for natural typing
+   - Removed Volume Discount visual hints per user request
+   - Credit breakdown tooltip shows discounts as percentages
+
+### Files Modified:
+- `src/controllers/processing.controller.ts` - Complete credit calculation overhaul
+- `frontend/src/components/processing/ProcessingSettings.tsx` - UI improvements and fixes
+
 ---
-Last Updated: 2025-09-23 20:45 WIB
+Last Updated: 2025-09-23 21:50 WIB
 Status: ✅ ALL SYSTEMS OPERATIONAL
 - Backend server active on port 3002
 - Frontend server active on port 3000
 - Video processing fully functional
-- Credits transaction history implemented
+- New volume-based credit system active
+- Generate Count input field fixed
+- Volume discount hints removed from UI
 - All hardcoded components removed
 - Dynamic FFmpeg filter generation working
 - Support for any video count (1+)
