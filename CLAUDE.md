@@ -347,8 +347,25 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/controllers/processing.controller.ts` - Complete credit calculation overhaul
 - `frontend/src/components/processing/ProcessingSettings.tsx` - UI improvements and fixes
 
+## 🎨 UI Improvements (2025-09-23)
+
+### Recent UI Updates:
+1. **Processing Tips Removed**: Cleaned up Processing Dashboard by removing tips section
+2. **Project List Enhanced**: Added group count display alongside video count for each project
+3. **Credits Page Simplified**:
+   - Removed Transaction History tab (redundant with Usage Analytics)
+   - Removed Overview tab (simplified navigation)
+   - Usage Analytics is now the main view for transaction details
+4. **Generate Count Input Fixed**: Fixed sticky digit issue for better UX
+
+### Files Modified:
+- `frontend/src/components/processing/ProcessingDashboard.tsx` - Removed processing tips
+- `frontend/src/components/projects/ProjectList.tsx` - Added group count display
+- `src/controllers/project.controller.ts` - Added groupCount to API response
+- `frontend/src/components/credits/CreditUsageDisplay.tsx` - Removed Overview and Transaction History tabs
+
 ---
-Last Updated: 2025-09-23 21:50 WIB
+Last Updated: 2025-09-23 22:10 WIB
 Status: ✅ ALL SYSTEMS OPERATIONAL
 - Backend server active on port 3002
 - Frontend server active on port 3000
@@ -356,6 +373,8 @@ Status: ✅ ALL SYSTEMS OPERATIONAL
 - New volume-based credit system active
 - Generate Count input field fixed
 - Volume discount hints removed from UI
+- Project list shows video and group counts
+- Credits page simplified to essential tabs only
 - All hardcoded components removed
 - Dynamic FFmpeg filter generation working
 - Support for any video count (1+)

@@ -44,10 +44,12 @@ export class ProjectController {
 
       const pagination = createPagination(pageNum, limitNum, total);
 
-      // Parse settings for each project
+      // Parse settings for each project and add counts
       const projectsWithParsedSettings = projects.map(project => ({
         ...project,
-        settings: database.parseJson(project.settings)
+        settings: database.parseJson(project.settings),
+        videoCount: project.videoFiles.length,
+        groupCount: project.videoGroups.length
       }));
 
       ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);

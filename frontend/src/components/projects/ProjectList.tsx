@@ -11,6 +11,7 @@ interface Project {
   createdAt: string;
   updatedAt: string;
   videoCount: number;
+  groupCount: number;
   settings: {
     mixingMode: string;
     outputFormat: string;
@@ -493,7 +494,10 @@ const ProjectList: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {project.videoCount} videos
+                          <div>
+                            <div>{project.videoCount || 0} videos</div>
+                            <div className="text-xs text-gray-400">{project.groupCount || 0} groups</div>
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(project.updatedAt)}
@@ -544,7 +548,8 @@ const ProjectList: React.FC = () => {
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(project.status)}`}>
                             {project.status}
                           </span>
-                          <span>{project.videoCount} videos</span>
+                          <span>{project.videoCount || 0} videos</span>
+                          <span>{project.groupCount || 0} groups</span>
                           <span>{formatDate(project.updatedAt)}</span>
                         </div>
                       </div>

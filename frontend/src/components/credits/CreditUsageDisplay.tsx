@@ -51,7 +51,7 @@ const CreditUsageDisplay: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'balance' | 'history' | 'purchase' | 'usage'>('usage');
+  const [activeTab, setActiveTab] = useState<'usage' | 'purchase'>('usage');
   const [transactionFilter, setTransactionFilter] = useState<string>('ALL');
   const [dateRange, setDateRange] = useState<{start: string | null, end: string | null}>({start: null, end: null});
   const [searchTerm, setSearchTerm] = useState('');
@@ -229,26 +229,6 @@ const CreditUsageDisplay: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="flex -mb-px">
             <button
-              onClick={() => setActiveTab('balance')}
-              className={`py-2 px-6 border-b-2 font-medium text-sm ${
-                activeTab === 'balance'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`py-2 px-6 border-b-2 font-medium text-sm ${
-                activeTab === 'history'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Transaction History
-            </button>
-            <button
               onClick={() => setActiveTab('usage')}
               className={`py-2 px-6 border-b-2 font-medium text-sm ${
                 activeTab === 'usage'
@@ -272,113 +252,7 @@ const CreditUsageDisplay: React.FC = () => {
         </div>
 
         <div className="p-6">
-          {/* Overview Tab */}
-          {activeTab === 'balance' && usageStats && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-500">Total Used</h3>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                  </svg>
-                </div>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {(usageStats?.totalCreditsUsed || 0).toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">credits consumed</p>
-              </div>
 
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-500">Videos Processed</h3>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {usageStats.videosProcessed}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">total videos</p>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-500">Avg per Video</h3>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {(usageStats?.averageCreditsPerVideo || 0).toFixed(1)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">credits/video</p>
-              </div>
-            </div>
-          )}
-
-          {/* Transaction History Tab */}
-          {activeTab === 'history' && (
-            <div>
-              <div className="overflow-hidden">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Description
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Balance
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((transaction, index) => (
-                      <tr key={transaction.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {getTransactionIcon(transaction.type)}
-                            <span className="ml-2 text-sm font-medium text-gray-900">
-                              {transaction.type}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {transaction.description}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`text-sm font-medium ${
-                            transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {transaction.amount > 0 ? '+' : ''}{transaction.amount}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {transaction.balance}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(transaction.createdAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {transactions.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    No transactions yet
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Usage Analytics Tab - Detailed Transaction History */}
           {activeTab === 'usage' && (

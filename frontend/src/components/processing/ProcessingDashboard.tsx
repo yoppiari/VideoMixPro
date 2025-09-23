@@ -177,28 +177,6 @@ const ProcessingDashboard: React.FC = () => {
           onStatsUpdate={handleJobsUpdate}
           statusFilter={filter === 'all' ? undefined : filter}
         />
-
-        {/* Processing Tips */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">Processing Tips</h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Processing time depends on video length, quality settings, and output count</li>
-                  <li>You can cancel jobs that are pending or currently processing</li>
-                  <li>Completed jobs will show download links for output files</li>
-                  <li>Failed jobs will display error messages to help troubleshoot issues</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </DashboardLayout>
   );
