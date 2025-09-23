@@ -118,7 +118,11 @@ npx prisma generate
 
 ## Docker Deployment
 
-The Docker container automatically uses PostgreSQL:
+**Docker containers are hardcoded to use PostgreSQL only** and will automatically:
+- Force `DATABASE_PROVIDER="postgresql"`
+- Generate PostgreSQL schema at startup
+- Use PostgreSQL migration files
+- Ignore any SQLite configuration
 
 ```bash
 # Build and run with external PostgreSQL
@@ -126,8 +130,9 @@ docker build -t videomixpro .
 docker run -d \
     -p 3000:3000 \
     -e DATABASE_URL="postgres://..." \
-    -e DATABASE_PROVIDER="postgresql" \
     videomixpro
+    
+# DATABASE_PROVIDER is automatically set - do not specify it
 ```
 
 ## Database-Specific Considerations

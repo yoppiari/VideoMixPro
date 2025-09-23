@@ -191,11 +191,23 @@ set -e
 
 echo "Initializing external PostgreSQL database..."
 
+# Force PostgreSQL configuration for Docker
+export DATABASE_PROVIDER="postgresql"
+echo "🔧 Docker container configured for PostgreSQL"
+
 # Validate required environment variables
 if [ -z "\$DATABASE_URL" ]; then
     echo "❌ ERROR: DATABASE_URL environment variable is required"
     exit 1
 fi
+
+# Generate PostgreSQL schema
+echo "📝 Generating PostgreSQL schema..."
+node scripts/generate-schema.js
+
+# Generate Prisma client for PostgreSQL
+echo "🔄 Generating Prisma client..."
+npx prisma generate
 
 echo "📡 Connecting to external PostgreSQL database..."
 echo "🔗 Database URL: \${DATABASE_URL%@*}@***" # Hide password in logs
@@ -216,6 +228,19 @@ for i in {1..60}; do
     echo "⏳ Waiting for database... (attempt \$i/60)"
     sleep 5
 done
+
+# Ensure PostgreSQL migrations are active
+echo "🔄 Setting up PostgreSQL migrations..."
+
+# Switch to PostgreSQL migrations if they exist
+if [ -d "/app/prisma/migrations-postgres" ] && [ ! -d "/app/prisma/migrations" ]; then
+    echo "📂 Activating PostgreSQL migration directory..."
+    mv /app/prisma/migrations-postgres /app/prisma/migrations
+elif [ -d "/app/prisma/migrations-postgres" ] && [ -d "/app/prisma/migrations" ]; then
+    echo "📂 Using existing PostgreSQL migrations..."
+    rm -rf /app/prisma/migrations
+    mv /app/prisma/migrations-postgres /app/prisma/migrations
+fi
 
 # Run Prisma migrations with validation
 echo "🔄 Running Prisma migrations..."
@@ -303,6 +328,7 @@ RUN chmod +x /app/init-db.sh
 ENV NODE_ENV=production
 ENV PORT=3002
 ENV DATABASE_PROVIDER="postgresql"
+ENV DOCKER_ENV="true"
 ENV JWT_SECRET="production-jwt-secret-change-this"
 ENV FRONTEND_URL="http://localhost:3000"
 

@@ -12,14 +12,18 @@ require('dotenv').config();
 const provider = process.env.DATABASE_PROVIDER || 'sqlite';
 const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
 
+// In Docker environment, always use PostgreSQL
+const isDocker = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true';
+const finalProvider = isDocker ? 'postgresql' : provider;
+
 // Read base schema
 const basePath = path.join(__dirname, '..', 'prisma', 'schema-base.prisma');
 const baseSchema = fs.readFileSync(basePath, 'utf8');
 
-// Generate appropriate header based on provider
+// Generate appropriate header based on final provider
 let header = '';
 
-if (provider === 'postgresql') {
+if (finalProvider === 'postgresql') {
   header = `generator client {
   provider = "prisma-client-js"
 }
@@ -50,5 +54,9 @@ const fullSchema = header + baseSchema;
 const schemaPath = path.join(__dirname, '..', 'prisma', 'schema.prisma');
 fs.writeFileSync(schemaPath, fullSchema);
 
-console.log(`✅ Generated Prisma schema for ${provider}`);
+if (isDocker && provider !== 'postgresql') {
+  console.log(`🔧 Docker environment detected - forcing PostgreSQL (was: ${provider})`);
+}
+
+console.log(`✅ Generated Prisma schema for ${finalProvider}`);
 console.log(`   Database URL: ${databaseUrl.includes('postgres') ? databaseUrl.split('@')[1] : databaseUrl}`);

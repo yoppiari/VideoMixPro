@@ -9,9 +9,15 @@ VideoMixPro now uses a **single unified Dockerfile** that connects to an **exter
 The unified container includes:
 - **Frontend**: React app built and served via Nginx on port 3000
 - **Backend**: Node.js API server on port 3002
-- **Database**: External PostgreSQL (configured via environment variable)
+- **Database**: External PostgreSQL (always enforced in Docker)
 - **FFmpeg**: Video processing capabilities
 - **Supervisor**: Process management for Nginx + Node.js
+
+**Important**: Docker containers are **hardcoded to use PostgreSQL** and will automatically:
+- Force `DATABASE_PROVIDER="postgresql"`
+- Generate PostgreSQL schema at startup
+- Use PostgreSQL migrations
+- Reject SQLite configuration
 
 ## Quick Deployment
 
@@ -92,7 +98,7 @@ docker rmi videomixpro:latest
 
 ### Required Variables:
 - `DATABASE_URL`: PostgreSQL connection string (required)
-- `DATABASE_PROVIDER`: Set to "postgresql" (required)
+- `DATABASE_PROVIDER`: Automatically set to "postgresql" in Docker (do not override)
 
 ### Optional Variables:
 - `JWT_SECRET`: Secret for JWT token signing
@@ -105,10 +111,11 @@ docker run -d \
     --name videomixpro \
     -p 3000:3000 \
     -e DATABASE_URL="postgres://user:password@host:port/database" \
-    -e DATABASE_PROVIDER="postgresql" \
     -e JWT_SECRET="your-secure-jwt-secret" \
     -e FRONTEND_URL="https://yourdomain.com" \
     videomixpro:latest
+    
+# Note: DATABASE_PROVIDER is automatically set to "postgresql" in Docker
 ```
 
 ## Persistent Storage
