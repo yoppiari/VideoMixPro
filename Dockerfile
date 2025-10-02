@@ -285,6 +285,9 @@ RUN mkdir -p /var/log/supervisor /var/run/supervisor && \
     chown -R appuser:appgroup /var/run/supervisor && \
     chown -R appuser:appgroup /var/lib/nginx
 
+# Define volumes for persistent data
+VOLUME ["/app/uploads", "/app/outputs", "/app/logs"]
+
 # Expose port (nginx will serve on 3000, backend on 3002)
 EXPOSE 3000
 
