@@ -13,7 +13,6 @@ coverage
 .coverage
 .tmp
 .cache
-dist
 .DS_Store
 Thumbs.db
 logs

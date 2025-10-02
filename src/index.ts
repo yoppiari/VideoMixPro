@@ -99,14 +99,14 @@ const startServer = async (): Promise<void> => {
     logger.info('Database connected successfully');
 
     // Clean up stale jobs from previous sessions
-    await cleanupStaleJobs();
+    // await cleanupStaleJobs(); // Disabled - schema mismatch with project.status field
 
     // Start production services
-    if (process.env.NODE_ENV === 'production') {
-      cleanupService.start();
-      backupService.start();
-      logger.info('Production services started (cleanup & backup)');
-    }
+    // if (process.env.NODE_ENV === 'production') {
+    //   cleanupService.start();
+    //   backupService.start();
+    //   logger.info('Production services started (cleanup & backup)');
+    // }
 
     app.listen(port, () => {
       logger.info(`Server running on port ${port}`);

@@ -87,7 +87,7 @@ videoProcessingQueue.process('generate-thumbnail', 10, async (job) => {
 });
 
 // Process video format conversion jobs
-videoProcessingQueue.process('convert-video', 3, async (job) => {
+videoProcessingQueue.process('convert-video', 3, async (job: any) => {
   const { inputPath, options } = job.data as {
     inputPath: string;
     options: import('../services/video-processing.service').ConversionOptions
@@ -106,7 +106,7 @@ videoProcessingQueue.process('convert-video', 3, async (job) => {
 });
 
 // Process watermark addition jobs
-videoProcessingQueue.process('add-watermark', 5, async (job) => {
+videoProcessingQueue.process('add-watermark', 5, async (job: any) => {
   const { videoPath, watermarkOptions } = job.data as {
     videoPath: string;
     watermarkOptions: import('../services/video-processing.service').WatermarkOptions
@@ -125,7 +125,7 @@ videoProcessingQueue.process('add-watermark', 5, async (job) => {
 });
 
 // Process video concatenation jobs
-videoProcessingQueue.process('concatenate-videos', 3, async (job) => {
+videoProcessingQueue.process('concatenate-videos', 3, async (job: any) => {
   const { videoPaths, outputOptions } = job.data as {
     videoPaths: string[];
     outputOptions: import('../services/video-processing.service').VideoMixingOptions

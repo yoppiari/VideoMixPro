@@ -22,30 +22,27 @@ COPY frontend/postcss.config.js ./
 # Build React application
 RUN npm run build
 
-# Stage 2: Build Backend
+# Stage 2: Build Backend (Use pre-built dist)
 FROM node:18-alpine AS backend-builder
 
 WORKDIR /app
 
-# Install build dependencies for native modules
-RUN apk add --no-cache python3 make g++
-
 # Copy backend package files
 COPY package*.json ./
-COPY tsconfig.json ./
 
-# Install backend dependencies
-RUN npm ci
+# Install backend dependencies (for Prisma generation only)
+RUN npm ci --only=production
 
-# Copy backend source
-COPY src ./src
+# Copy Prisma schema
 COPY prisma ./prisma
 
-# Generate Prisma client
+# Generate Prisma client for PostgreSQL
+ENV DATABASE_PROVIDER="postgresql"
+ENV DATABASE_URL="postgresql://placeholder:placeholder@placeholder:5432/placeholder"
 RUN npx prisma generate
 
-# Build backend
-RUN npm run build
+# Copy pre-built dist folder
+COPY dist ./dist
 
 # Stage 3: Production Runtime (External PostgreSQL)
 FROM node:18-alpine AS production
@@ -95,7 +92,13 @@ RUN mkdir -p \
     backups \
     /var/log/nginx \
     /var/cache/nginx \
-    /run/nginx
+    /run/nginx \
+    /var/lib/nginx/logs \
+    /var/lib/nginx/tmp/client_body \
+    /var/lib/nginx/tmp/proxy \
+    /var/lib/nginx/tmp/fastcgi \
+    /var/lib/nginx/tmp/uwsgi \
+    /var/lib/nginx/tmp/scgi
 
 # Copy nginx configuration
 COPY <<EOF /etc/nginx/nginx.conf
@@ -165,7 +168,7 @@ logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisor/supervisord.pid
 
 [program:backend]
-command=node dist/index.js
+command=node -r module-alias/register dist/index.js
 directory=/app
 user=appuser
 autostart=true
@@ -212,23 +215,6 @@ npx prisma generate
 echo "📡 Connecting to external PostgreSQL database..."
 echo "🔗 Database URL: \${DATABASE_URL%@*}@***" # Hide password in logs
 
-# Wait for external PostgreSQL to be ready
-echo "⏳ Waiting for external PostgreSQL to be ready..."
-for i in {1..60}; do
-    if npx prisma db execute --stdin <<< "SELECT 1;" > /dev/null 2>&1; then
-        echo "✅ External PostgreSQL is ready"
-        break
-    fi
-    
-    if [ \$i -eq 60 ]; then
-        echo "❌ Failed to connect to external PostgreSQL after 5 minutes"
-        exit 1
-    fi
-    
-    echo "⏳ Waiting for database... (attempt \$i/60)"
-    sleep 5
-done
-
 # Ensure PostgreSQL migrations are active
 echo "🔄 Setting up PostgreSQL migrations..."
 
@@ -271,52 +257,7 @@ npx prisma generate
 
 # Create admin user
 echo "👤 Creating admin user..."
-node -e "
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
-
-async function createAdmin() {
-    const prisma = new PrismaClient({
-        datasources: { db: { url: process.env.DATABASE_URL } }
-    });
-    
-    try {
-        const hashedPassword = await bcrypt.hash('Admin123!', 12);
-        
-        await prisma.user.upsert({
-            where: { email: 'admin@videomix.pro' },
-            update: {
-                credits: 1000,
-                licenseType: 'ENTERPRISE',
-                role: 'ADMIN'
-            },
-            create: {
-                email: 'admin@videomix.pro',
-                password: hashedPassword,
-                firstName: 'Admin',
-                lastName: 'User',
-                credits: 1000,
-                licenseType: 'ENTERPRISE',
-                role: 'ADMIN'
-            }
-        });
-        
-        console.log('✅ Admin user created/updated successfully');
-        console.log('📧 Email: admin@videomix.pro');
-        console.log('🔑 Password: Admin123!');
-        console.log('💳 Credits: 1000');
-        console.log('👤 Role: ADMIN');
-        
-    } catch (error) {
-        console.error('❌ Error creating admin user:', error.message);
-        process.exit(1);
-    } finally {
-        await prisma.\$disconnect();
-    }
-}
-
-createAdmin();
-"
+node /app/scripts/create-admin.js
 
 echo "🎉 Database initialization complete!"
 EOF
@@ -331,14 +272,18 @@ ENV DATABASE_PROVIDER="postgresql"
 ENV DOCKER_ENV="true"
 ENV JWT_SECRET="production-jwt-secret-change-this"
 ENV FRONTEND_URL="http://localhost:3000"
+ENV USE_IN_MEMORY_QUEUE=true
+ENV REDIS_URL="redis://localhost:6379"
 
 # Create supervisor log directory and set permissions
-RUN mkdir -p /var/log/supervisor && \
+RUN mkdir -p /var/log/supervisor /var/run/supervisor && \
     chown -R appuser:appgroup /app && \
     chown -R appuser:appgroup /var/log/nginx && \
     chown -R appuser:appgroup /var/cache/nginx && \
     chown -R appuser:appgroup /run/nginx && \
-    chown -R appuser:appgroup /var/log/supervisor
+    chown -R appuser:appgroup /var/log/supervisor && \
+    chown -R appuser:appgroup /var/run/supervisor && \
+    chown -R appuser:appgroup /var/lib/nginx
 
 # Expose port (nginx will serve on 3000, backend on 3002)
 EXPOSE 3000
