@@ -784,11 +784,15 @@ export class VideoProcessingService {
       groupId: file.groupId
     }));
 
+    // Check if voice over mode is enabled
+    const isVoiceOverMode = (settings as any).voiceOverMode === true || (settings as any).audioMode === 'voiceover';
+
     // Sanitize settings (same as in processAutoMixing)
     const sanitizedSettings = {
       // Core mixing options
       orderMixing: Boolean(settings.orderMixing),
-      speedMixing: Boolean(settings.speedMixing),
+      // Force speedMixing to false in voice over mode
+      speedMixing: isVoiceOverMode ? false : Boolean(settings.speedMixing),
       differentStartingVideo: Boolean(settings.differentStartingVideo),
       groupMixing: Boolean(settings.groupMixing),
 
@@ -874,11 +878,15 @@ export class VideoProcessingService {
 
     logger.info(`[Auto-Mixing] Converted ${videoFiles.length} video files to ${clips.length} clips for processing`);
 
+    // Check if voice over mode is enabled
+    const isVoiceOverMode = (settings as any).voiceOverMode === true || (settings as any).audioMode === 'voiceover';
+
     // Validate and sanitize settings with fallbacks for removed properties
     const sanitizedSettings = {
       // Core mixing options
       orderMixing: Boolean(settings.orderMixing),
-      speedMixing: Boolean(settings.speedMixing),
+      // Force speedMixing to false in voice over mode
+      speedMixing: isVoiceOverMode ? false : Boolean(settings.speedMixing),
       differentStartingVideo: Boolean(settings.differentStartingVideo),
       groupMixing: Boolean(settings.groupMixing),
 
@@ -1927,60 +1935,65 @@ export class VideoProcessingService {
 
   /**
    * Refund credits for failed job
+   * DISABLED: Credit system temporarily disabled
    */
   async refundCreditsForFailedJob(jobId: string): Promise<boolean> {
-    try {
-      const job = await prisma.processingJob.findUnique({
-        where: { id: jobId },
-        include: {
-          project: {
-            include: {
-              user: true
-            }
-          }
-        }
-      });
+    logger.info(`[Credit System] DISABLED - Skipping refund for job ${jobId}`);
+    return true; // Always return true since credit system is disabled
 
-      if (!job || !job.creditsUsed || job.creditsUsed === 0 || job.refundedAt) {
-        return false; // No refund needed
-      }
+    // DISABLED CODE BELOW:
+    // try {
+    //   const job = await prisma.processingJob.findUnique({
+    //     where: { id: jobId },
+    //     include: {
+    //       project: {
+    //         include: {
+    //           user: true
+    //         }
+    //       }
+    //     }
+    //   });
 
-      // Start transaction to refund credits
-      await prisma.$transaction(async (tx) => {
-        // Add credits back to user
-        await tx.user.update({
-          where: { id: job.project.userId },
-          data: {
-            credits: { increment: job.creditsUsed }
-          }
-        });
+    //   if (!job || !job.creditsUsed || job.creditsUsed === 0 || job.refundedAt) {
+    //     return false; // No refund needed
+    //   }
 
-        // Create refund transaction record
-        await tx.creditTransaction.create({
-          data: {
-            userId: job.project.userId,
-            amount: job.creditsUsed,
-            type: TransactionType.REFUND,
-            description: `Refund for failed processing job: ${job.project.name}`,
-            referenceId: jobId // Link to the failed job
-          }
-        });
+    //   // Start transaction to refund credits
+    //   await prisma.$transaction(async (tx) => {
+    //     // Add credits back to user
+    //     await tx.user.update({
+    //       where: { id: job.project.userId },
+    //       data: {
+    //         credits: { increment: job.creditsUsed }
+    //       }
+    //     });
 
-        // Mark job as refunded
-        await tx.processingJob.update({
-          where: { id: jobId },
-          data: {
-            refundedAt: new Date()
-          }
-        });
-      });
+    //     // Create refund transaction record
+    //     await tx.creditTransaction.create({
+    //       data: {
+    //         userId: job.project.userId,
+    //         amount: job.creditsUsed,
+    //         type: TransactionType.REFUND,
+    //         description: `Refund for failed processing job: ${job.project.name}`,
+    //         referenceId: jobId // Link to the failed job
+    //       }
+    //     });
 
-      logger.info(`Refunded ${job.creditsUsed} credits for failed job ${jobId}`);
-      return true;
-    } catch (error) {
-      logger.error(`Failed to refund credits for job ${jobId}:`, error);
-      return false;
-    }
+    //     // Mark job as refunded
+    //     await tx.processingJob.update({
+    //       where: { id: jobId },
+    //       data: {
+    //         refundedAt: new Date()
+    //       }
+    //     });
+    //   });
+
+    //   logger.info(`Refunded ${job.creditsUsed} credits for failed job ${jobId}`);
+    //   return true;
+    // } catch (error) {
+    //   logger.error(`Failed to refund credits for job ${jobId}:`, error);
+    //   return false;
+    // }
   }
 
   /**

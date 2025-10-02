@@ -101,7 +101,8 @@ export class ProcessingController {
 
         // Core mixing options with validation
         orderMixing: Boolean(mixingSettings.orderMixing),
-        speedMixing: Boolean(mixingSettings.speedMixing),
+        // Force speedMixing to false in voice over mode (auto-speed adjustment is used instead)
+        speedMixing: isVoiceOverMode ? false : Boolean(mixingSettings.speedMixing),
         differentStartingVideo: Boolean(mixingSettings.differentStartingVideo),
         groupMixing: Boolean(mixingSettings.groupMixing),
 
@@ -164,24 +165,28 @@ export class ProcessingController {
       // Calculate credit cost using the actual settings that will be used for processing
       const creditsRequired = this.calculateCreditsRequired(outputCount, processingSettings);
 
+      // TEMPORARY: Credit system disabled - unlimited generation
       // Check user credits
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { credits: true }
       });
 
-      if (!user || user.credits < creditsRequired) {
-        ResponseHelper.error(res, `Insufficient credits. Required: ${creditsRequired}, Available: ${user?.credits || 0}`, 402);
-        return;
-      }
+      // DISABLED: Credit check
+      // if (!user || user.credits < creditsRequired) {
+      //   ResponseHelper.error(res, `Insufficient credits. Required: ${creditsRequired}, Available: ${user?.credits || 0}`, 402);
+      //   return;
+      // }
+
+      logger.info('[Credit System] DISABLED - Unlimited generation mode active');
 
       // Create processing job
       const job = await prisma.$transaction(async (tx) => {
-        // Deduct credits - FIX: Use actual creditsRequired amount
-        await tx.user.update({
-          where: { id: userId },
-          data: { credits: { decrement: creditsRequired } }
-        });
+        // DISABLED: Credit deduction
+        // await tx.user.update({
+        //   where: { id: userId },
+        //   data: { credits: { decrement: creditsRequired } }
+        // });
 
         // Update project status
         await tx.project.update({
@@ -201,16 +206,16 @@ export class ProcessingController {
           }
         });
 
-        // Record transaction with job reference
-        await tx.creditTransaction.create({
-          data: {
-            userId,
-            amount: -creditsRequired,
-            type: TransactionType.USAGE,
-            description: `Video processing for project: ${project.name} (${outputCount} videos)`,
-            referenceId: newJob.id // Link to the processing job
-          }
-        });
+        // DISABLED: Credit transaction recording
+        // await tx.creditTransaction.create({
+        //   data: {
+        //     userId,
+        //     amount: -creditsRequired,
+        //     type: TransactionType.USAGE,
+        //     description: `Video processing for project: ${project.name} (${outputCount} videos)`,
+        //     referenceId: newJob.id // Link to the processing job
+        //   }
+        // });
 
         return newJob;
       });

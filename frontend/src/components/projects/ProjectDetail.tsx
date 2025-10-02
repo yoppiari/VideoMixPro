@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../layout/DashboardLayout';
 import VideoGallery from '../videos/VideoGallery';
@@ -74,6 +74,17 @@ const ProjectDetail: React.FC = () => {
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [mixingSettings, setMixingSettings] = useState<MixingSettings | null>(null);
   const [voiceOverFiles, setVoiceOverFiles] = useState<any[]>([]);
+
+  // Store previous speedMixing state when entering voice over mode
+  const previousSpeedMixingRef = useRef<boolean>(false);
+
+  // Update ref whenever speedMixing changes while voice over is disabled
+  // This ensures we always restore to the most recent user preference
+  useEffect(() => {
+    if (mixingSettings && mixingSettings.audioMode !== 'voiceover') {
+      previousSpeedMixingRef.current = mixingSettings.speedMixing || false;
+    }
+  }, [mixingSettings?.speedMixing, mixingSettings?.audioMode]);
 
   // Edit form states
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -989,18 +1000,21 @@ const ProjectDetail: React.FC = () => {
               isEnabled={mixingSettings?.audioMode === 'voiceover' || false}
               onToggle={(enabled) => {
                 if (enabled) {
+                  // Note: previousSpeedMixingRef is auto-updated by useEffect when voice over is disabled
                   setMixingSettings(prev => ({
                     ...prev!,
                     audioMode: 'voiceover',
                     voiceOverMode: true,
                     durationType: 'original',
-                    speedMixing: false
+                    speedMixing: false // Force disable speed mixing in voice over mode
                   }));
                 } else {
+                  // Restore previous speedMixing state when exiting voice over mode
                   setMixingSettings(prev => ({
                     ...prev!,
                     audioMode: 'keep',
-                    voiceOverMode: false
+                    voiceOverMode: false,
+                    speedMixing: previousSpeedMixingRef.current // Restore from ref
                   }));
                 }
               }}

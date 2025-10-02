@@ -150,6 +150,17 @@ const ProcessingSettings: React.FC<ProcessingSettingsProps> = ({
 
   const [settings, setSettings] = useState<MixingSettings>(getInitialSettings());
 
+  // Auto-disable speed mixing when voice over mode is enabled
+  useEffect(() => {
+    if (settings.audioMode === 'voiceover' && settings.speedMixing) {
+      console.log('[ProcessingSettings] Voice over mode enabled, disabling speed mixing');
+      setSettings(prev => ({
+        ...prev,
+        speedMixing: false
+      }));
+    }
+  }, [settings.audioMode]);
+
   const [variantEstimate, setVariantEstimate] = useState(0);
   const [creditEstimate, setCreditEstimate] = useState<{
     creditsRequired: number;
