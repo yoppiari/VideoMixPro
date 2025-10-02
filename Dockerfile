@@ -22,18 +22,23 @@ COPY frontend/postcss.config.js ./
 # Build React application
 RUN npm run build
 
-# Stage 2: Build Backend (Use pre-built dist)
+# Stage 2: Build Backend
 FROM node:18-alpine AS backend-builder
 
 WORKDIR /app
 
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
 # Copy backend package files
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Install backend dependencies (for Prisma generation only)
-RUN npm ci --only=production
+# Install ALL dependencies (including devDependencies for building)
+RUN npm ci
 
-# Copy Prisma schema
+# Copy backend source
+COPY src ./src
 COPY prisma ./prisma
 
 # Generate Prisma client for PostgreSQL
@@ -41,8 +46,8 @@ ENV DATABASE_PROVIDER="postgresql"
 ENV DATABASE_URL="postgresql://placeholder:placeholder@placeholder:5432/placeholder"
 RUN npx prisma generate
 
-# Copy pre-built dist folder
-COPY dist ./dist
+# Build TypeScript to JavaScript
+RUN npm run build
 
 # Stage 3: Production Runtime (External PostgreSQL)
 FROM node:18-alpine AS production

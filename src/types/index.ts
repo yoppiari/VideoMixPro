@@ -1,9 +1,36 @@
-import {
-  LicenseType as PrismaLicenseType,
-  ProjectStatus as PrismaProjectStatus,
-  JobStatus as PrismaJobStatus,
-  TransactionType as PrismaTransactionType
-} from '@prisma/client';
+// Define custom types (not importing from Prisma to avoid schema mismatches)
+export type LicenseType = 'FREE' | 'PREMIUM' | 'ENTERPRISE';
+export type ProjectStatus = 'DRAFT' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type TransactionType = 'PURCHASE' | 'USAGE' | 'REFUND' | 'BONUS';
+
+export const LicenseType = {
+  FREE: 'FREE' as LicenseType,
+  PREMIUM: 'PREMIUM' as LicenseType,
+  ENTERPRISE: 'ENTERPRISE' as LicenseType
+};
+
+export const ProjectStatus = {
+  DRAFT: 'DRAFT' as ProjectStatus,
+  PROCESSING: 'PROCESSING' as ProjectStatus,
+  COMPLETED: 'COMPLETED' as ProjectStatus,
+  FAILED: 'FAILED' as ProjectStatus
+};
+
+export const JobStatus = {
+  PENDING: 'PENDING' as JobStatus,
+  PROCESSING: 'PROCESSING' as JobStatus,
+  COMPLETED: 'COMPLETED' as JobStatus,
+  FAILED: 'FAILED' as JobStatus,
+  CANCELLED: 'CANCELLED' as JobStatus
+};
+
+export const TransactionType = {
+  PURCHASE: 'PURCHASE' as TransactionType,
+  USAGE: 'USAGE' as TransactionType,
+  REFUND: 'REFUND' as TransactionType,
+  BONUS: 'BONUS' as TransactionType
+};
 
 export interface User {
   id: string;
@@ -13,44 +40,11 @@ export interface User {
   lastName: string;
   isActive: boolean;
   credits: number;
-  licenseType: PrismaLicenseType;
+  licenseType: LicenseType;
   licenseExpiry: Date;
   createdAt: Date;
   updatedAt: Date;
 }
-
-// Re-export Prisma enums with different names
-export type LicenseType = PrismaLicenseType;
-export type ProjectStatus = PrismaProjectStatus;
-export type JobStatus = PrismaJobStatus;
-export type TransactionType = PrismaTransactionType;
-
-export const LicenseType = {
-  FREE: 'FREE' as PrismaLicenseType,
-  PREMIUM: 'PREMIUM' as PrismaLicenseType,
-  ENTERPRISE: 'ENTERPRISE' as PrismaLicenseType
-};
-
-export const ProjectStatus = {
-  DRAFT: 'DRAFT' as PrismaProjectStatus,
-  PROCESSING: 'PROCESSING' as PrismaProjectStatus,
-  COMPLETED: 'COMPLETED' as PrismaProjectStatus,
-  FAILED: 'FAILED' as PrismaProjectStatus
-};
-
-export const JobStatus = {
-  PENDING: 'PENDING' as PrismaJobStatus,
-  PROCESSING: 'PROCESSING' as PrismaJobStatus,
-  COMPLETED: 'COMPLETED' as PrismaJobStatus,
-  FAILED: 'FAILED' as PrismaJobStatus,
-  CANCELLED: 'CANCELLED' as PrismaJobStatus
-};
-
-export const TransactionType = {
-  PURCHASE: 'PURCHASE' as PrismaTransactionType,
-  USAGE: 'USAGE' as PrismaTransactionType,
-  REFUND: 'REFUND' as PrismaTransactionType
-};
 
 // Define missing enums based on schema
 export enum MixingMode {
@@ -76,9 +70,6 @@ export interface Project {
   name: string;
   description?: string;
   userId: string;
-  status: PrismaProjectStatus;
-  outputCount: number;
-  settings: ProjectSettings;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -123,7 +114,7 @@ export interface VideoFile {
 export interface ProcessingJob {
   id: string;
   projectId: string;
-  status: PrismaJobStatus;
+  status: JobStatus;
   progress: number;
   startedAt?: Date;
   completedAt?: Date;
@@ -148,7 +139,7 @@ export interface CreditTransaction {
   id: string;
   userId: string;
   amount: number;
-  type: PrismaTransactionType;
+  type: TransactionType;
   description: string;
   createdAt: Date;
 }
@@ -172,7 +163,7 @@ export interface PaginationInfo {
 export interface AuthTokenPayload {
   userId: string;
   email: string;
-  licenseType: PrismaLicenseType;
+  licenseType: LicenseType;
   iat: number;
   exp: number;
 }
@@ -193,7 +184,7 @@ export interface LicenseVerificationRequest {
 
 export interface LicenseVerificationResponse {
   valid: boolean;
-  licenseType: PrismaLicenseType;
+  licenseType: LicenseType;
   expiry: Date;
   features: string[];
   maxProjects: number;

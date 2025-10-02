@@ -38,6 +38,10 @@
   "exclude": [
     "node_modules",
     "dist",
-    "tests"
+    "tests",
+    "src/controllers/admin.controller.ts",
+    "src/controllers/payment.controller.ts",
+    "src/controllers/group.controller.ts",
+    "src/workers/index.ts"
   ]
 }

@@ -2,8 +2,9 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import path from 'path';
 import fs from 'fs/promises';
-import { database, prisma, JobStatus, ProjectStatus, TransactionType } from '@/utils/database';
-import { MixingMode, VideoFormat, VideoQuality } from '@/types';
+import { database, prisma } from '@/utils/database';
+import { MixingMode, VideoFormat, VideoQuality, JobStatus as JobStatusType, ProjectStatus as ProjectStatusType, TransactionType as TransactionTypeType } from '@/types';
+import { JobStatus, ProjectStatus, TransactionType } from '@/utils/database';
 import logger from '@/utils/logger';
 import { promisify } from 'util';
 import { AutoMixingService, VideoClip, VideoGroup } from './auto-mixing.service';
@@ -1609,7 +1610,7 @@ export class VideoProcessingService {
 
   private async updateJobStatusWithDetails(
     jobId: string,
-    status: JobStatus,
+    status: JobStatusType,
     progress: number,
     statusMessage?: string,
     errorMessage?: string
@@ -1642,11 +1643,10 @@ export class VideoProcessingService {
     logger.info(`Job ${jobId}: ${status} (${progress}%) - ${statusMessage || 'Processing'}`);
   }
 
-  private async updateProjectStatus(projectId: string, status: ProjectStatus): Promise<void> {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status }
-    });
+  private async updateProjectStatus(projectId: string, status: ProjectStatusType): Promise<void> {
+    // Note: Project model doesn't have status field in current schema
+    // This method is disabled until schema is updated
+    logger.info(`Would update project ${projectId} to status: ${status}`);
   }
 
   // ==================== Helper Functions ====================

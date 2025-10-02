@@ -120,7 +120,7 @@ export const prisma = new Proxy({} as PrismaClient, {
 });
 
 // Export types for use in application
-export type { User, Project, VideoFile, ProcessingJob } from '@prisma/client';
+export type { User, Project, ProcessingJob, Video } from '@prisma/client';
 
 // Export enums as objects for SQLite compatibility
 export const LicenseType = {
