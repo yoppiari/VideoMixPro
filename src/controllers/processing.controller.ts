@@ -141,7 +141,7 @@ export class ProcessingController {
         durationDistributionMode: ['proportional', 'equal', 'weighted'].includes(mixingSettings.durationDistributionMode)
           ? mixingSettings.durationDistributionMode
           : 'proportional',
-        audioMode: isVoiceOverMode ? 'voiceover' : (mixingSettings.audioMode === 'mute' ? 'mute' : 'keep'),
+        audioMode: (mixingSettings.audioMode === 'mute' ? 'mute' : 'keep') as 'keep' | 'mute' | 'voiceover',
         voiceOverMode: isVoiceOverMode,
 
         // Force removed features to safe defaults

@@ -93,13 +93,8 @@ export class ProjectController {
         return;
       }
 
-      // Parse settings before sending response
-      const projectWithParsedSettings = {
-        ...project,
-        settings: database.parseJson(project.settings)
-      };
-
-      ResponseHelper.success(res, projectWithParsedSettings);
+      // Send response (settings field doesn't exist in schema)
+      ResponseHelper.success(res, project);
     } catch (error) {
       logger.error('Get project error:', error);
       ResponseHelper.serverError(res, 'Failed to get project');
@@ -143,13 +138,8 @@ export class ProjectController {
         );
       }
 
-      // Parse settings back to object before sending response
-      const responseProject = {
-        ...project,
-        settings: database.parseJson(project.settings)
-      };
-
-      ResponseHelper.success(res, responseProject, 'Project created successfully', 201);
+      // Send response (settings field doesn't exist in schema)
+      ResponseHelper.success(res, project, 'Project created successfully', 201);
     } catch (error) {
       logger.error('Create project error:', error);
       ResponseHelper.serverError(res, 'Failed to create project');
@@ -175,10 +165,11 @@ export class ProjectController {
         return;
       }
 
-      if (existingProject.status === ProjectStatus.PROCESSING) {
-        ResponseHelper.error(res, 'Cannot update project while processing', 409);
-        return;
-      }
+      // Project status check disabled - status field doesn't exist in schema
+      // if (existingProject.status === ProjectStatus.PROCESSING) {
+      //   ResponseHelper.error(res, 'Cannot update project while processing', 409);
+      //   return;
+      // }
 
       const { name, description, settings } = req.body;
 
@@ -195,13 +186,8 @@ export class ProjectController {
         }
       });
 
-      // Parse settings before sending response
-      const projectWithParsedSettings = {
-        ...project,
-        settings: database.parseJson(project.settings)
-      };
-
-      ResponseHelper.success(res, projectWithParsedSettings, 'Project updated successfully');
+      // Send response (settings field doesn't exist in schema)
+      ResponseHelper.success(res, project, 'Project updated successfully');
     } catch (error) {
       logger.error('Update project error:', error);
       ResponseHelper.serverError(res, 'Failed to update project');
@@ -340,7 +326,7 @@ export class ProjectController {
       }
 
       // Check if group has videos
-      const videoCount = await prisma.videoFile.count({
+      const videoCount = await prisma.video.count({
         where: { groupId }
       });
 

@@ -846,7 +846,7 @@ export class VideoProcessingService {
       fixedDuration: typeof settings.fixedDuration === 'number' ? settings.fixedDuration : 30,
       durationDistributionMode: settings.durationDistributionMode || 'proportional',
       smartTrimming: Boolean(settings.smartTrimming),
-      audioMode: settings.audioMode === 'mute' ? 'mute' : 'keep',
+      audioMode: (settings.audioMode === 'mute' ? 'mute' : 'keep') as 'keep' | 'mute',
 
       // Output count with validation
       outputCount: Math.max(1, Math.min(100, Number(outputCount) || 5))
@@ -940,7 +940,7 @@ export class VideoProcessingService {
       fixedDuration: typeof settings.fixedDuration === 'number' ? settings.fixedDuration : 30,
       durationDistributionMode: settings.durationDistributionMode || 'proportional',
       smartTrimming: Boolean(settings.smartTrimming),
-      audioMode: settings.audioMode === 'mute' ? 'mute' : 'keep',
+      audioMode: (settings.audioMode === 'mute' ? 'mute' : 'keep') as 'keep' | 'mute',
 
       // Output count with validation
       outputCount: Math.max(1, Math.min(100, Number(settings.outputCount) || 5))

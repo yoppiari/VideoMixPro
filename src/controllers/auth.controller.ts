@@ -127,7 +127,7 @@ export class AuthController {
         return;
       }
 
-      const newToken = this.generateToken(user.id, user.email, user.licenseType);
+      const newToken = this.generateToken(user.id, user.email, user.licenseType as LicenseType);
 
       ResponseHelper.success(res, { token: newToken }, 'Token refreshed');
     } catch (error) {
