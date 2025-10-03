@@ -89,6 +89,29 @@ export interface VideoMixingOptions {
   watermark?: WatermarkOptions;
   crossfadeDuration?: number; // Duration in seconds
   enableTransitions?: boolean;
+
+  // Core mixing options
+  orderMixing?: boolean;
+  speedMixing?: boolean;
+  differentStartingVideo?: boolean;
+  groupMixing?: boolean;
+
+  // Audio options
+  audioMode?: 'keep' | 'mute' | 'voiceover';
+  voiceOverMode?: boolean;
+
+  // Speed settings
+  speedRange?: { min: number; max: number };
+  speedVariations?: boolean;
+
+  // Duration settings
+  durationDistributionMode?: 'proportional' | 'equal' | 'weighted';
+  smartTrimming?: boolean;
+
+  // Transition and color options
+  transitionMixing?: boolean;
+  transitionVariations?: boolean;
+  colorVariations?: boolean;
 }
 
 // Prisma client is imported from database adapter
@@ -503,14 +526,14 @@ export class VideoProcessingService {
       project = await prisma.project.findUnique({
         where: { id: data.projectId },
         include: {
-          videoFiles: {
+          videos: {
             include: {
               group: true
             }
           },
-          videoGroups: {
+          groups: {
             include: {
-              videoFiles: true
+              videos: true
             },
             orderBy: { order: 'asc' }
           },
@@ -802,7 +825,7 @@ export class VideoProcessingService {
       allowedSpeeds: Array.isArray(settings.allowedSpeeds) ? settings.allowedSpeeds : [0.5, 0.75, 1, 1.25, 1.5, 2],
 
       // Group mixing settings
-      groupMixingMode: settings.groupMixingMode === 'random' ? 'random' : 'strict',
+      groupMixingMode: (settings.groupMixingMode === 'random' ? 'random' : 'strict') as 'strict' | 'random',
 
       // Removed features - force to safe defaults
       transitionMixing: false,
@@ -896,7 +919,7 @@ export class VideoProcessingService {
       allowedSpeeds: Array.isArray(settings.allowedSpeeds) ? settings.allowedSpeeds : [0.5, 0.75, 1, 1.25, 1.5, 2],
 
       // Group mixing settings
-      groupMixingMode: settings.groupMixingMode === 'random' ? 'random' : 'strict',
+      groupMixingMode: (settings.groupMixingMode === 'random' ? 'random' : 'strict') as 'strict' | 'random',
 
       // Removed features - force to safe defaults
       transitionMixing: false,
@@ -1334,7 +1357,7 @@ export class VideoProcessingService {
     clips: VideoClip[],
     settings: VideoMixingOptions,
     outputName: string,
-    transitionType: TransitionType
+    transitionType: string
   ): Promise<string> {
     const timestamp = Date.now();
     const outputPath = path.join(this.outputDir, `${outputName}_${timestamp}.${settings.outputFormat.toLowerCase()}`);
@@ -1348,7 +1371,8 @@ export class VideoProcessingService {
       });
 
       // Generate advanced filter complex using auto-mixing service
-      const filterComplex = this.autoMixingService.generateFilterComplex(clips, transitionType, 1.0);
+      // Note: This method is currently unused as transitions are disabled
+      const filterComplex: string[] = []; // this.autoMixingService.generateFilterComplex would go here
 
       // Apply the intelligent filter complex
       if (filterComplex.length > 0) {
@@ -1544,47 +1568,49 @@ export class VideoProcessingService {
         });
 
         const duration = metadata.format.duration || 0;
+        const videoStream = metadata.streams.find((s: any) => s.codec_type === 'video');
 
         // Check if this is voice-over mode
-        const isVoiceOverMode = settings.voiceOverMode === 'enabled';
+        const isVoiceOverMode = settings.voiceOverMode === 'enabled' || settings.voiceOverMode === true;
 
-        // Build metadata object
-        const metadataObj: any = {
+        // Build settings object for database
+        const settingsObj: any = {
           ...(settings.metadata?.static || {}),
           format: metadata.format.format_name,
-          resolution: `${metadata.streams[0]?.width}x${metadata.streams[0]?.height}`,
+          resolution: `${videoStream?.width || 0}x${videoStream?.height || 0}`,
           created_at: new Date().toISOString()
         };
 
         // Add voice-over specific metadata if applicable
         if (isVoiceOverMode && settings.voiceOverFiles && settings.voiceOverFiles[index]) {
           const voiceOver = settings.voiceOverFiles[index];
-          metadataObj.voiceOverFile = voiceOver.originalName || voiceOver.filename;
-          metadataObj.voiceOverDuration = voiceOver.duration;
-          metadataObj.outputIndex = index;
+          settingsObj.voiceOverFile = voiceOver.originalName || voiceOver.filename;
+          settingsObj.voiceOverDuration = voiceOver.duration;
+          settingsObj.outputIndex = index;
         }
 
         return {
           jobId,
           filename,
-          path: outputPath,
+          originalVideoIds: '', // Empty for now - could be populated with source video IDs if needed
           size: stats.size,
           duration,
-          metadata: JSON.stringify(metadataObj),
-          sourceFiles: isVoiceOverMode && settings.voiceOverFiles?.[index]
-            ? JSON.stringify([settings.voiceOverFiles[index].filename])
-            : JSON.stringify([])
+          width: videoStream?.width || 0,
+          height: videoStream?.height || 0,
+          fps: videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : 30,
+          bitrate: parseInt(metadata.format.bit_rate || '0'),
+          settings: JSON.stringify(settingsObj)
         };
       })
     );
 
-    // Save to database
-    await prisma.outputFile.createMany({
+    // Save to database using ProcessedVideo model
+    await prisma.processedVideo.createMany({
       data: outputFiles
     });
   }
 
-  private async updateJobStatus(jobId: string, status: JobStatus, progress: number, errorMessage?: string): Promise<void> {
+  private async updateJobStatus(jobId: string, status: JobStatusType, progress: number, errorMessage?: string): Promise<void> {
     const updateData: any = {
       status,
       progress

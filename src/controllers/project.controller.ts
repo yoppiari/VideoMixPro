@@ -23,10 +23,10 @@ export class ProjectController {
         prisma.project.findMany({
           where: { userId },
           include: {
-            videoFiles: {
+            videos: {
               select: { id: true, originalName: true, size: true, duration: true }
             },
-            videoGroups: {
+            groups: {
               select: { id: true, name: true, order: true }
             },
             processingJobs: {
@@ -47,9 +47,9 @@ export class ProjectController {
       // Parse settings for each project and add counts
       const projectsWithParsedSettings = projects.map(project => ({
         ...project,
-        settings: database.parseJson(project.settings),
-        videoCount: project.videoFiles.length,
-        groupCount: project.videoGroups.length
+        
+        videoCount: project.videos.length,
+        groupCount: project.groups.length
       }));
 
       ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);
@@ -72,14 +72,14 @@ export class ProjectController {
       const project = await prisma.project.findFirst({
         where: { id, userId },
         include: {
-          videoFiles: {
+          videos: {
             include: {
               group: {
                 select: { id: true, name: true }
               }
             }
           },
-          videoGroups: {
+          groups: {
             orderBy: { order: 'asc' }
           },
           processingJobs: {
@@ -120,12 +120,11 @@ export class ProjectController {
         data: {
           name,
           description,
-          userId,
-          settings: database.stringifyJson(settings),
-          status: ProjectStatus.DRAFT
+          userId
+          // settings and status fields don't exist in Project schema
         },
         include: {
-          videoGroups: true
+          groups: true
         }
       });
 
@@ -187,12 +186,12 @@ export class ProjectController {
         where: { id },
         data: {
           ...(name && { name }),
-          ...(description !== undefined && { description }),
-          ...(settings && { settings: database.stringifyJson(settings) })
+          ...(description !== undefined && { description })
+          // settings field doesn't exist in Project schema
         },
         include: {
-          videoFiles: true,
-          videoGroups: true
+          videos: true,
+          groups: true
         }
       });
 

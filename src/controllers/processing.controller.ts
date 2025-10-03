@@ -3,7 +3,7 @@ import { prisma } from '@/utils/database';
 import { AuthenticatedRequest } from '@/middleware/auth.middleware';
 import { ResponseHelper, createPagination } from '@/utils/response';
 import { VideoProcessingService } from '@/services/video-processing.service';
-import { JobStatus, ProjectStatus, TransactionType } from '@/types';
+import { JobStatus, ProjectStatus, TransactionType, VideoFormat, MixingMode, VideoQuality } from '@/types';
 import { DbHelper } from '@/utils/db-helper';
 import logger from '@/utils/logger';
 import path from 'path';
@@ -27,9 +27,9 @@ export class ProcessingController {
       const project = await prisma.project.findFirst({
         where: { id: projectId, userId },
         include: {
-          videoFiles: true,
-          videoGroups: {
-            include: { videoFiles: true }
+          videos: true,
+          groups: {
+            include: { videos: true }
           },
           voiceOverFiles: true // Include voice over files
         }
@@ -40,18 +40,19 @@ export class ProcessingController {
         return;
       }
 
-      if (project.status === ProjectStatus.PROCESSING) {
-        ResponseHelper.error(res, 'Project is already being processed', 409);
-        return;
-      }
+      // Project status check disabled - status field doesn't exist in schema
+      // if (project.status === ProjectStatus.PROCESSING) {
+      //   ResponseHelper.error(res, 'Project is already being processed', 409);
+      //   return;
+      // }
 
-      if (project.videoFiles.length === 0) {
+      if (project.videos.length === 0) {
         ResponseHelper.error(res, 'Project has no video files', 400);
         return;
       }
 
       // Minimum 2 videos required for mixing
-      if (project.videoFiles.length < 2) {
+      if (project.videos.length < 2) {
         ResponseHelper.error(res, 'Minimum 2 videos required for mixing. Please upload more videos.', 400);
         return;
       }
@@ -90,9 +91,9 @@ export class ProcessingController {
       // Sanitize settings with safe defaults (removing problematic properties)
       const processingSettings = {
         // Required fields for VideoMixingOptions interface
-        outputFormat: 'MP4', // Default to MP4 format
-        mixingMode: Boolean(mixingSettings.groupMixing) ? 'MANUAL' : 'AUTO', // Based on groupMixing setting
-        quality: 'HIGH', // Default to high quality
+        outputFormat: 'MP4' as VideoFormat, // Default to MP4 format
+        mixingMode: (Boolean(mixingSettings.groupMixing) ? 'MANUAL' : 'AUTO') as MixingMode, // Based on groupMixing setting
+        quality: 'HIGH' as VideoQuality, // Default to high quality
         metadata: {
           static: {}, // Empty static metadata
           includeDynamic: false, // No dynamic metadata
@@ -159,7 +160,7 @@ export class ProcessingController {
         smartTrimming: processingSettings.smartTrimming,
         durationDistributionMode: processingSettings.durationDistributionMode,
         outputCount: outputCount,
-        videoCount: project.videoFiles.length
+        videoCount: project.videos.length
       }));
 
       // Calculate credit cost using the actual settings that will be used for processing
@@ -188,21 +189,22 @@ export class ProcessingController {
         //   data: { credits: { decrement: creditsRequired } }
         // });
 
-        // Update project status
-        await tx.project.update({
-          where: { id: projectId },
-          data: { status: ProjectStatus.PROCESSING }
-        });
+        // Update project status - Disabled: status field doesn't exist in schema
+        // await tx.project.update({
+        //   where: { id: projectId },
+        //   data: { status: ProjectStatus.PROCESSING }
+        // });
 
         // Create job with credits tracking and settings
         const newJob = await tx.processingJob.create({
           data: {
             projectId,
+            userId,
             status: JobStatus.PENDING,
             creditsUsed: creditsRequired, // Track credits used for potential refund
             outputCount: outputCount,
-            settings: DbHelper.serializeJson(processingSettings) as string, // Store settings for reference
-            processingMode: isVoiceOverMode ? 'VOICEOVER' : 'NORMAL' // Set processing mode
+            settings: DbHelper.serializeJson(processingSettings) as string // Store settings for reference
+            // processingMode field doesn't exist in ProcessingJob schema
           }
         });
 
@@ -230,7 +232,7 @@ export class ProcessingController {
       ResponseHelper.success(res, {
         jobId: job.id,
         creditsDeducted: creditsRequired,
-        estimatedDuration: this.estimateProcessingTime(project.videoFiles, outputCount)
+        estimatedDuration: this.estimateProcessingTime(project.videos, outputCount)
       }, 'Processing started successfully', 202);
     } catch (error) {
       logger.error('Start processing error:', error);
@@ -257,7 +259,7 @@ export class ProcessingController {
           project: {
             select: { id: true, name: true }
           },
-          outputFiles: {
+          outputs: {
             select: { id: true, filename: true, size: true, createdAt: true }
           }
         }
@@ -338,7 +340,7 @@ export class ProcessingController {
           project: {
             select: { id: true, name: true }
           },
-          outputFiles: {
+          outputs: {
             select: { id: true, filename: true, size: true, createdAt: true }
           }
         },
@@ -386,7 +388,7 @@ export class ProcessingController {
             project: {
               select: { id: true, name: true }
             },
-            outputFiles: {
+            outputs: {
               select: { id: true, filename: true, size: true }
             }
           },
@@ -479,7 +481,7 @@ export class ProcessingController {
           project: {
             select: { id: true, name: true }
           },
-          outputFiles: true
+          outputs: true
         }
       });
 
@@ -524,7 +526,7 @@ export class ProcessingController {
         createdAt: job.createdAt,
         completedAt: job.completedAt,
         errorDetails,
-        outputFiles: job.outputFiles,
+        outputs: job.outputs,
         settings,
         duration: job.completedAt ?
           Math.floor((job.completedAt.getTime() - job.createdAt.getTime()) / 1000) : null
@@ -551,7 +553,7 @@ export class ProcessingController {
           project: { userId }
         },
         include: {
-          outputFiles: {
+          outputs: {
             orderBy: { createdAt: 'asc' }
           }
         }
@@ -562,7 +564,7 @@ export class ProcessingController {
         return;
       }
 
-      ResponseHelper.success(res, job.outputFiles);
+      ResponseHelper.success(res, job.outputs);
     } catch (error) {
       logger.error('Get job outputs error:', error);
       ResponseHelper.serverError(res, 'Failed to get job outputs');
@@ -579,7 +581,7 @@ export class ProcessingController {
         return;
       }
 
-      const output = await prisma.outputFile.findFirst({
+      const output = await prisma.processedVideo.findFirst({
         where: {
           id: outputId,
           job: {
@@ -593,7 +595,10 @@ export class ProcessingController {
         return;
       }
 
-      if (!fs.existsSync(output.path)) {
+      // Construct path from filename - path field doesn't exist in ProcessedVideo schema
+      const outputPath = path.join(process.env.OUTPUT_DIR || 'outputs', output.filename);
+
+      if (!fs.existsSync(outputPath)) {
         ResponseHelper.notFound(res, 'File not found on disk');
         return;
       }
@@ -601,7 +606,7 @@ export class ProcessingController {
       res.setHeader('Content-Disposition', `attachment; filename="${output.filename}"`);
       res.setHeader('Content-Type', 'video/mp4');
 
-      const fileStream = fs.createReadStream(output.path);
+      const fileStream = fs.createReadStream(outputPath);
       fileStream.pipe(res);
     } catch (error) {
       logger.error('Download output error:', error);
@@ -627,7 +632,7 @@ export class ProcessingController {
           project: { userId }
         },
         include: {
-          outputFiles: true,
+          outputs: true,
           project: true
         }
       });
@@ -638,10 +643,10 @@ export class ProcessingController {
       }
 
       // Determine which files to include
-      let filesToZip = job.outputFiles;
+      let filesToZip = job.outputs;
 
       if (mode === 'selected' && outputIds && outputIds.length > 0) {
-        filesToZip = job.outputFiles.filter(f => outputIds.includes(f.id));
+        filesToZip = job.outputs.filter(f => outputIds.includes(f.id));
       }
 
       if (filesToZip.length === 0) {
@@ -670,8 +675,10 @@ export class ProcessingController {
 
       // Add files to archive
       for (const file of filesToZip) {
-        if (fs.existsSync(file.path)) {
-          archive.file(file.path, { name: file.filename });
+        // Construct path from filename - path field doesn't exist in ProcessedVideo schema
+        const filePath = path.join(process.env.OUTPUT_DIR || 'outputs', file.filename);
+        if (fs.existsSync(filePath)) {
+          archive.file(filePath, { name: file.filename });
         }
       }
 
@@ -702,7 +709,7 @@ export class ProcessingController {
           project: { userId }
         },
         include: {
-          outputFiles: {
+          outputs: {
             skip: Number(chunkIndex) * Number(chunkSize),
             take: Number(chunkSize)
           },
@@ -710,7 +717,7 @@ export class ProcessingController {
         }
       });
 
-      if (!job || job.outputFiles.length === 0) {
+      if (!job || job.outputs.length === 0) {
         ResponseHelper.error(res, 'No files found for this chunk', 404);
         return;
       }
@@ -733,9 +740,11 @@ export class ProcessingController {
       archive.pipe(res);
 
       // Add files to archive
-      for (const file of job.outputFiles) {
-        if (fs.existsSync(file.path)) {
-          archive.file(file.path, { name: file.filename });
+      for (const file of job.outputs) {
+        // Construct path from filename - path field doesn't exist in ProcessedVideo schema
+        const filePath = path.join(process.env.OUTPUT_DIR || 'outputs', file.filename);
+        if (fs.existsSync(filePath)) {
+          archive.file(filePath, { name: file.filename });
         }
       }
 
@@ -764,7 +773,7 @@ export class ProcessingController {
           project: { userId }
         },
         include: {
-          outputFiles: {
+          outputs: {
             select: {
               id: true,
               size: true
@@ -779,8 +788,8 @@ export class ProcessingController {
       }
 
       // Calculate total size and recommended chunks
-      const totalSize = job.outputFiles.reduce((sum, file) => sum + file.size, 0);
-      const totalFiles = job.outputFiles.length;
+      const totalSize = job.outputs.reduce((sum, file) => sum + Number(file.size), 0);
+      const totalFiles = job.outputs.length;
       const recommendedChunkSize = totalFiles > 100 ? 50 : totalFiles > 50 ? 25 : totalFiles;
       const numberOfChunks = Math.ceil(totalFiles / recommendedChunkSize);
 
@@ -1020,8 +1029,8 @@ export class ProcessingController {
     return factors.join(', ');
   }
 
-  private estimateProcessingTime(videoFiles: any[], outputCount: number): string {
-    const totalDuration = videoFiles.reduce((sum, file) => sum + file.duration, 0);
+  private estimateProcessingTime(videos: any[], outputCount: number): string {
+    const totalDuration = videos.reduce((sum, file) => sum + file.duration, 0);
     const estimatedMinutes = Math.ceil((totalDuration * outputCount) / 60 / 4); // Assume 4x real-time processing
 
     if (estimatedMinutes < 60) {

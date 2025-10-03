@@ -42,7 +42,7 @@ export class AuthController {
         }
       });
 
-      const token = this.generateToken(user.id, user.email, user.licenseType);
+      const token = this.generateToken(user.id, user.email, user.licenseType as LicenseType);
 
       ResponseHelper.success(res, { user, token }, 'Registration successful', 201);
     } catch (error) {
@@ -75,7 +75,7 @@ export class AuthController {
         return;
       }
 
-      const token = this.generateToken(user.id, user.email, user.licenseType);
+      const token = this.generateToken(user.id, user.email, user.licenseType as LicenseType);
 
       const userData = {
         id: user.id,
@@ -206,15 +206,16 @@ export class AuthController {
         return;
       }
 
-      const features = this.getLicenseFeatures(user.licenseType);
+      const licType = user.licenseType as LicenseType;
+      const features = this.getLicenseFeatures(licType);
 
       ResponseHelper.success(res, {
         valid: true,
         licenseType: user.licenseType,
         expiry: user.licenseExpiry,
         features,
-        maxProjects: this.getMaxProjects(user.licenseType),
-        maxCredits: this.getMaxCredits(user.licenseType)
+        maxProjects: this.getMaxProjects(licType),
+        maxCredits: this.getMaxCredits(licType)
       }, 'License verified');
     } catch (error) {
       logger.error('License verification error:', error);
