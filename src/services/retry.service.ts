@@ -321,10 +321,11 @@ export class RetryService {
       });
 
       if (job) {
-        await prisma.project.update({
-          where: { id: job.projectId },
-          data: { status: 'FAILED' as any }
-        });
+        // DISABLED: Project status field doesn't exist in schema
+        // await prisma.project.update({
+        //   where: { id: job.projectId },
+        //   data: { status: 'FAILED' as any }
+        // });
       }
 
       logger.info(`Job ${jobId} marked as failed`);

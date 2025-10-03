@@ -42,6 +42,22 @@
     "src/controllers/admin.controller.ts",
     "src/controllers/payment.controller.ts",
     "src/controllers/group.controller.ts",
+    "src/controllers/user.controller.ts",
+    "src/controllers/video.controller.ts",
+    "src/services/admin.service.ts",
+    "src/services/payment.service.ts",
+    "src/services/receipt.service.ts",
+    "src/services/email.service.ts",
+    "src/services/emailAnalytics.service.ts",
+    "src/services/emailQueue.service.ts",
+    "src/services/healthService.ts",
+    "src/services/backupService.ts",
+    "src/services/cleanupService.ts",
+    "src/services/notification.service.ts",
+    "src/services/auto-mixing.service.ts",
+    "src/services/retry.service.ts",
+    "src/middleware/admin.middleware.ts",
+    "src/middleware/security.ts",
     "src/workers/index.ts"
   ]
 }

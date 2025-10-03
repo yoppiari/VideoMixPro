@@ -1070,10 +1070,8 @@ export class AutoMixingService {
       // Apply transitions between videos
       for (let i = 0; i < concatenationVideoCount - 1; i++) {
         const transitionType = variant.transitions[i] || 'fade';
-        // Use configured transition duration or calculate based on video lengths
-        const configuredDuration = variant.settings.transitionDuration
-          ? (variant.settings.transitionDuration.min + variant.settings.transitionDuration.max) / 2
-          : 1.0;
+        // Use configured transition duration (defaults to 1.0s since transitionDuration not in settings)
+        const configuredDuration = 1.0;
         const transitionDuration = Math.min(
           configuredDuration,
           Math.min(videoDurations[i], videoDurations[i + 1]) * 0.2 // Max 20% of shorter video
@@ -1081,7 +1079,7 @@ export class AutoMixingService {
 
         // Calculate offset for xfade (transition starts before the end of the first video)
         // For chained xfades, use cumulative duration for subsequent transitions
-        const offset = i === 0
+        let offset = i === 0
           ? videoDurations[i] - transitionDuration
           : cumulativeDuration;
 

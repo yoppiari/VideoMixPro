@@ -119,7 +119,7 @@ export const validateFileUpload = (
   allowedMimeTypes: string[],
   maxSizeBytes: number
 ) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: Request, res: Response, next: NextFunction): Response | void => {
     if (!req.file && !req.files) {
       return next();
     }
@@ -161,7 +161,7 @@ export const validateRequest = (schema: {
   query?: z.ZodSchema;
   params?: z.ZodSchema;
 }) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: Request, res: Response, next: NextFunction): Response | void => {
     try {
       if (schema.body) {
         req.body = schema.body.parse(req.body);

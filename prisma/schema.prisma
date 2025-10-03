@@ -58,6 +58,7 @@ model Project {
 model Video {
   id           String    @id @default(cuid())
   filename     String
+  path         String    // Full file path for processing
   originalName String    @map("original_name")
   mimeType     String    @map("mime_type")
   size         BigInt    // BigInt works in both SQLite and PostgreSQL

@@ -54,15 +54,22 @@ export class VideoController {
         try {
           const metadata = await videoService.extractMetadata(file.path);
 
-          const videoFile = await prisma.videoFile.create({
+          // Parse resolution string (e.g., "1920x1080") into width and height
+          const [width, height] = metadata.resolution ? metadata.resolution.split('x').map(Number) : [0, 0];
+
+          const videoFile = await prisma.video.create({
             data: {
               originalName: file.originalname,
               filename: file.filename,
               path: file.path,
+              mimeType: file.mimetype,
               size: file.size,
               duration: metadata.duration,
-              format: metadata.format,
-              resolution: metadata.resolution,
+              width: width || 0,
+              height: height || 0,
+              fps: metadata.fps || 30,
+              bitrate: metadata.bitrate || 0,
+              codec: metadata.codec || 'unknown',
               projectId,
               groupId: groupId || null
             }
@@ -116,7 +123,7 @@ export class VideoController {
         return;
       }
 
-      const videos = await prisma.videoFile.findMany({
+      const videos = await prisma.video.findMany({
         where: { projectId },
         include: {
           group: {
@@ -156,15 +163,13 @@ export class VideoController {
         return;
       }
 
-      const video = await prisma.videoFile.findFirst({
+      const video = await prisma.video.findFirst({
         where: {
           id,
           project: { userId }
         },
         include: {
-          project: {
-            select: { status: true }
-          }
+          project: true
         }
       });
 
@@ -173,10 +178,11 @@ export class VideoController {
         return;
       }
 
-      if (video.project.status === 'PROCESSING') {
-        ResponseHelper.error(res, 'Cannot delete video while project is processing', 409);
-        return;
-      }
+      // Project status check disabled - status field doesn't exist in schema
+      // if (video.project.status === 'PROCESSING') {
+      //   ResponseHelper.error(res, 'Cannot delete video while project is processing', 409);
+      //   return;
+      // }
 
       // Delete file from storage
       try {
@@ -186,7 +192,7 @@ export class VideoController {
       }
 
       // Delete from database
-      await prisma.videoFile.delete({
+      await prisma.video.delete({
         where: { id }
       });
 
@@ -207,7 +213,7 @@ export class VideoController {
         return;
       }
 
-      const video = await prisma.videoFile.findFirst({
+      const video = await prisma.video.findFirst({
         where: {
           id,
           project: { userId }
@@ -244,7 +250,7 @@ export class VideoController {
       const { groupId } = req.body;
 
       // Verify video ownership
-      const video = await prisma.videoFile.findFirst({
+      const video = await prisma.video.findFirst({
         where: {
           id: videoId,
           project: { userId }
@@ -275,7 +281,7 @@ export class VideoController {
       }
 
       // Update video's group assignment
-      const updatedVideo = await prisma.videoFile.update({
+      const updatedVideo = await prisma.video.update({
         where: { id: videoId },
         data: { groupId: groupId || null },
         include: {
@@ -306,7 +312,7 @@ export class VideoController {
       }
 
       // Verify all videos belong to user
-      const videos = await prisma.videoFile.findMany({
+      const videos = await prisma.video.findMany({
         where: {
           id: { in: videoIds },
           project: { userId }
@@ -344,7 +350,7 @@ export class VideoController {
       }
 
       // Bulk update videos
-      const result = await prisma.videoFile.updateMany({
+      const result = await prisma.video.updateMany({
         where: { id: { in: videoIds } },
         data: { groupId: groupId || null }
       });

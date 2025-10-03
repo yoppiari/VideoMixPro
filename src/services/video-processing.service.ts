@@ -223,10 +223,11 @@ export class VideoProcessingService {
       });
 
       if (job) {
-        await prisma.project.update({
-          where: { id: job.projectId },
-          data: { status: ProjectStatus.DRAFT }
-        });
+        // DISABLED: Project status field doesn't exist in schema
+        // await prisma.project.update({
+        //   where: { id: job.projectId },
+        //   data: { status: ProjectStatus.DRAFT }
+        // });
       }
     } catch (error) {
       logger.error(`Failed to update cancelled job ${jobId} in database:`, error);

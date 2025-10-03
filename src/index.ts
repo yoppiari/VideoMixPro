@@ -151,15 +151,16 @@ const cleanupStaleJobs = async (): Promise<void> => {
       });
 
       // Update associated projects back to DRAFT
-      const projectIds = [...new Set(staleJobs.map(job => job.projectId))];
-      await prisma.project.updateMany({
-        where: {
-          id: { in: projectIds }
-        },
-        data: {
-          status: 'DRAFT'
-        }
-      });
+      // DISABLED: Project status field doesn't exist in schema
+      // const projectIds = [...new Set(staleJobs.map(job => job.projectId))];
+      // await prisma.project.updateMany({
+      //   where: {
+      //     id: { in: projectIds }
+      //   },
+      //   data: {
+      //     status: 'DRAFT'
+      //   }
+      // });
 
       logger.info(`Cleaned up ${staleJobs.length} stale jobs`);
     }

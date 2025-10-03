@@ -178,16 +178,8 @@ export class UserController {
           where,
           orderBy: { createdAt: 'desc' },
           skip,
-          take: limitNum,
-          include: {
-            payment: {
-              select: {
-                receiptNumber: true,
-                paymentMethod: true,
-                status: true
-              }
-            }
-          }
+          take: limitNum
+          // Payment model doesn't exist in schema - include disabled
         }),
         prisma.creditTransaction.count({ where }),
         prisma.user.findUnique({
@@ -300,7 +292,7 @@ export class UserController {
           where: { userId }
         }),
         // Total videos
-        prisma.videoFile.count({
+        prisma.video.count({
           where: {
             project: { userId }
           }
@@ -342,11 +334,10 @@ export class UserController {
             id: true,
             name: true,
             description: true,
-            status: true,
             updatedAt: true,
             _count: {
               select: {
-                videoFiles: true,
+                videos: true,
                 processingJobs: true
               }
             }
@@ -366,8 +357,8 @@ export class UserController {
           id: p.id,
           name: p.name,
           description: p.description,
-          status: p.status,
-          videoCount: p._count.videoFiles,
+          // status: p.status, // Project status field doesn't exist in schema
+          videoCount: p._count.videos,
           jobCount: p._count.processingJobs,
           lastActivity: p.updatedAt
         }))
