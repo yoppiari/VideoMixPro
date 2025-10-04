@@ -55,25 +55,35 @@ export class AuthController {
     try {
       const { email, password } = req.body;
 
+      logger.info('[Login] Attempting login for:', email);
+
       const user = await prisma.user.findUnique({
         where: { email }
       });
 
       if (!user || !user.isActive) {
+        logger.warn('[Login] User not found or inactive:', email);
         ResponseHelper.unauthorized(res, 'Invalid credentials');
         return;
       }
 
+      logger.info('[Login] User found, checking password...');
+
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
+        logger.warn('[Login] Invalid password for:', email);
         ResponseHelper.unauthorized(res, 'Invalid credentials');
         return;
       }
 
       if (user.licenseExpiry && user.licenseExpiry < new Date()) {
+        logger.warn('[Login] License expired for:', email);
         ResponseHelper.unauthorized(res, 'License expired');
         return;
       }
+
+      logger.info('[Login] Password valid, generating token...');
+      logger.info('[Login] JWT_SECRET available:', !!process.env.JWT_SECRET);
 
       const token = this.generateToken(user.id, user.email, user.licenseType as LicenseType);
 
@@ -87,9 +97,13 @@ export class AuthController {
         licenseExpiry: user.licenseExpiry
       };
 
+      logger.info('[Login] Login successful for:', email);
       ResponseHelper.success(res, { user: userData, token }, 'Login successful');
     } catch (error) {
-      logger.error('Login error:', error);
+      logger.error('[Login] Login error:', error);
+      logger.error('[Login] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      logger.error('[Login] JWT_SECRET set:', !!process.env.JWT_SECRET);
+      logger.error('[Login] DATABASE_URL set:', !!process.env.DATABASE_URL);
       ResponseHelper.serverError(res, 'Login failed');
     }
   }
