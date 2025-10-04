@@ -2,7 +2,7 @@
 
 /**
  * Fix failed migrations in PostgreSQL database
- * Marks failed migrations as rolled back so new migrations can proceed
+ * Removes SQLite migrations that are incompatible with PostgreSQL
  */
 
 const { PrismaClient } = require('@prisma/client');
@@ -17,43 +17,46 @@ async function fixFailedMigrations() {
   });
 
   try {
-    console.log('🔍 Checking for failed migrations...');
+    console.log('🔍 Checking for SQLite migrations in PostgreSQL database...');
 
-    // Query the _prisma_migrations table
-    const failedMigrations = await prisma.$queryRaw`
+    // Query all migrations including SQLite ones
+    const allMigrations = await prisma.$queryRaw`
       SELECT migration_name, started_at, finished_at, rolled_back_at
       FROM "_prisma_migrations"
-      WHERE finished_at IS NULL AND rolled_back_at IS NULL
       ORDER BY started_at DESC;
     `;
 
-    console.log(`Found ${failedMigrations.length} failed migrations:`);
-    failedMigrations.forEach(m => {
-      console.log(`  - ${m.migration_name} (started: ${m.started_at})`);
-    });
+    console.log(`Found ${allMigrations.length} total migrations`);
 
-    if (failedMigrations.length === 0) {
-      console.log('✅ No failed migrations found!');
+    // Find SQLite migrations (they contain "sqlite" in the name)
+    const sqliteMigrations = allMigrations.filter(m =>
+      m.migration_name.toLowerCase().includes('sqlite')
+    );
+
+    if (sqliteMigrations.length === 0) {
+      console.log('✅ No SQLite migrations found!');
       await prisma.$disconnect();
       return;
     }
 
-    // Mark all failed migrations as rolled back
-    console.log('\n🔄 Marking failed migrations as rolled back...');
+    console.log(`\nFound ${sqliteMigrations.length} SQLite migrations to remove:`);
+    sqliteMigrations.forEach(m => {
+      console.log(`  - ${m.migration_name}`);
+    });
 
-    for (const migration of failedMigrations) {
+    // Delete all SQLite migrations from the migration history
+    console.log('\n🗑️  Removing SQLite migrations from database...');
+
+    for (const migration of sqliteMigrations) {
       await prisma.$executeRaw`
-        UPDATE "_prisma_migrations"
-        SET rolled_back_at = NOW()
-        WHERE migration_name = ${migration.migration_name}
-          AND finished_at IS NULL
-          AND rolled_back_at IS NULL;
+        DELETE FROM "_prisma_migrations"
+        WHERE migration_name = ${migration.migration_name};
       `;
-      console.log(`  ✅ Rolled back: ${migration.migration_name}`);
+      console.log(`  ✅ Removed: ${migration.migration_name}`);
     }
 
-    console.log('\n✅ All failed migrations have been marked as rolled back');
-    console.log('💡 You can now run prisma migrate deploy again');
+    console.log('\n✅ All SQLite migrations have been removed');
+    console.log('💡 PostgreSQL migrations can now be applied cleanly');
 
     await prisma.$disconnect();
   } catch (error) {
