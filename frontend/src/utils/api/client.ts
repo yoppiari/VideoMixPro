@@ -1,6 +1,9 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3002/api';
+// Use relative URL in production (will use same domain as frontend)
+// In development, use localhost:3002
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ||
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3002/api');
 const API_TIMEOUT = parseInt(process.env.REACT_APP_API_TIMEOUT || '10000');
 
 class ApiClient {
