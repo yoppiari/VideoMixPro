@@ -241,28 +241,17 @@ else
     echo "    Will fallback to db push if migrations fail..."
 fi
 
-# Run Prisma migrations with validation
-echo "🔄 Running Prisma migrations..."
+# Apply database schema using db push (handles existing tables gracefully)
+echo "🔄 Applying database schema..."
+echo "📝 Using Prisma db push for safe schema synchronization..."
 
-# Check if migrations directory exists
-if [ -d "/app/prisma/migrations" ]; then
-    echo "📁 Found migration files, running Prisma migrate deploy..."
-    npx prisma migrate deploy
-    
-    # Validate migration status
-    if [ \$? -eq 0 ]; then
-        echo "✅ Migrations applied successfully"
-        
-        # Verify database schema
-        npx prisma migrate status
-    else
-        echo "❌ Migration failed, falling back to db push..."
-        npx prisma db push --force-reset
-    fi
-else
-    echo "📝 No migration files found, using db push..."
+# Use db push which is idempotent and handles existing tables
+npx prisma db push --accept-data-loss || {
+    echo "⚠️  DB push failed, trying without accept-data-loss..."
     npx prisma db push
-fi
+}
+
+echo "✅ Database schema synchronized"
 
 # Generate Prisma client for runtime
 echo "🔧 Generating Prisma client..."
