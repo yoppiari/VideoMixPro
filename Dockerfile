@@ -272,8 +272,8 @@ ENV NODE_ENV=production
 ENV PORT=3002
 ENV DATABASE_PROVIDER="postgresql"
 ENV DOCKER_ENV="true"
-ENV JWT_SECRET="production-jwt-secret-change-this"
-ENV FRONTEND_URL="http://localhost:3000"
+ENV JWT_SECRET="videomixpro-production-jwt-secret-2024-lumiku-secure-key-change-in-production"
+ENV FRONTEND_URL="https://private.lumiku.com"
 ENV USE_IN_MEMORY_QUEUE=true
 ENV REDIS_URL="redis://localhost:6379"
 
