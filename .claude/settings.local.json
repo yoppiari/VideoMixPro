@@ -13,7 +13,9 @@
       "Bash(node:*)",
       "Bash(set DATABASE_PROVIDER=postgresql)",
       "Bash(npx prisma generate:*)",
-      "Bash(curl -X POST https://private.lumiku.com/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@videomix.pro\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Admin123!\"\"\"\"}')"
+      "Bash(curl -X POST https://private.lumiku.com/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@videomix.pro\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Admin123!\"\"\"\"}')",
+      "Bash(curl -s https://private.lumiku.com/debug-env)",
+      "Bash(curl -s https://private.lumiku.com/api/debug-env)"
     ],
     "deny": [],
     "ask": []

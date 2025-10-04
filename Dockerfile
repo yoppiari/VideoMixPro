@@ -155,7 +155,12 @@ http {
         location /health {
             proxy_pass http://localhost:3002/health;
         }
-        
+
+        # Debug endpoint
+        location /debug-env {
+            proxy_pass http://localhost:3002/debug-env;
+        }
+
         # React Router - serve index.html for all routes
         location / {
             try_files \$uri \$uri/ /index.html;
