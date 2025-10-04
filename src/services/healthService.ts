@@ -131,6 +131,22 @@ export class HealthService {
       error: 'Health service disabled',
     };
   }
+
+  async handleHealthCheck(req: any, res: any): Promise<void> {
+    const status = await this.getHealthStatus();
+    res.status(status.status === 'healthy' ? 200 : 503).json(status);
+  }
+
+  async handleReadinessCheck(req: any, res: any): Promise<void> {
+    const status = await this.getHealthStatus();
+    res.status(status.status === 'unhealthy' ? 503 : 200).json({
+      ready: status.status !== 'unhealthy'
+    });
+  }
+
+  async handleLivenessCheck(req: any, res: any): Promise<void> {
+    res.status(200).json({ alive: true });
+  }
 }
 
 export const healthService = new HealthService();
