@@ -33,7 +33,8 @@
       "Bash(test:*)",
       "Bash(cat:*)",
       "Bash(git checkout:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(psql \"postgres://postgres:6LP0Ojegy7IUU6kaX9lLkmZRUiAdAUNOltWyL3LegfYGR6rPQtB4DUSVqjdA78ES@107.155.75.50:5986/videomix\" -c \"SELECT version();\")"
     ],
     "deny": [],
     "ask": []

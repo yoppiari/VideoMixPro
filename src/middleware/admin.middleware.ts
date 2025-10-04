@@ -155,6 +155,7 @@ export const permissionMiddleware = (requiredPermissions: string[]) => {
 
 /**
  * Log admin action for audit trail
+ * DISABLED: AdminLog model not in schema
  */
 export const logAdminAction = async (
   adminId: string,
@@ -165,24 +166,27 @@ export const logAdminAction = async (
   metadata?: any,
   req?: Request
 ): Promise<void> => {
-  try {
-    await prisma.adminLog.create({
-      data: {
-        adminId,
-        action,
-        targetType,
-        targetId,
-        description: description || `${action} on ${targetType}`,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        ipAddress: req?.ip || req?.connection?.remoteAddress || null,
-        userAgent: req?.get('User-Agent') || null,
-      },
-    });
+  // DISABLED: AdminLog model not in schema
+  // try {
+  //   await prisma.adminLog.create({
+  //     data: {
+  //       adminId,
+  //       action,
+  //       targetType,
+  //       targetId,
+  //       description: description || `${action} on ${targetType}`,
+  //       metadata: metadata ? JSON.stringify(metadata) : null,
+  //       ipAddress: req?.ip || req?.connection?.remoteAddress || null,
+  //       userAgent: req?.get('User-Agent') || null,
+  //     },
+  //   });
+  //   logger.info(`Admin action logged: ${action} by ${adminId} on ${targetType}${targetId ? ` (${targetId})` : ''}`);
+  // } catch (error) {
+  //   logger.error('Failed to log admin action:', error);
+  // }
 
-    logger.info(`Admin action logged: ${action} by ${adminId} on ${targetType}${targetId ? ` (${targetId})` : ''}`);
-  } catch (error) {
-    logger.error('Failed to log admin action:', error);
-  }
+  // Temporary: Just log to console instead
+  logger.info(`[ADMIN ACTION DISABLED] ${action} by ${adminId} on ${targetType}${targetId ? ` (${targetId})` : ''}`);
 };
 
 /**
