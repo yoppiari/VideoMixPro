@@ -28,7 +28,12 @@
       "Bash(timeout:*)",
       "Bash(set PORT=3005)",
       "Bash(set PORT=3002)",
-      "Bash(start \"http://localhost:3000\")"
+      "Bash(start \"http://localhost:3000\")",
+      "WebFetch(domain:coolify.io)",
+      "Bash(test:*)",
+      "Bash(cat:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)"
     ],
     "deny": [],
     "ask": []

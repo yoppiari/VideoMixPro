@@ -224,13 +224,17 @@ echo "🔗 Database URL: \${DATABASE_URL%@*}@***" # Hide password in logs
 echo "🔄 Setting up PostgreSQL migrations..."
 
 # Switch to PostgreSQL migrations if they exist
-if [ -d "/app/prisma/migrations-postgres" ] && [ ! -d "/app/prisma/migrations" ]; then
+if [ -d "/app/prisma/migrations-postgres" ]; then
     echo "📂 Activating PostgreSQL migration directory..."
-    mv /app/prisma/migrations-postgres /app/prisma/migrations
-elif [ -d "/app/prisma/migrations-postgres" ] && [ -d "/app/prisma/migrations" ]; then
-    echo "📂 Using existing PostgreSQL migrations..."
-    rm -rf /app/prisma/migrations
-    mv /app/prisma/migrations-postgres /app/prisma/migrations
+    if [ -d "/app/prisma/migrations" ]; then
+        echo "⚠️  Removing existing SQLite migrations..."
+        rm -rf /app/prisma/migrations
+    fi
+    cp -r /app/prisma/migrations-postgres /app/prisma/migrations
+    echo "✅ PostgreSQL migrations activated"
+else
+    echo "⚠️  No migrations-postgres found in repository!"
+    echo "    Will fallback to db push if migrations fail..."
 fi
 
 # Run Prisma migrations with validation
