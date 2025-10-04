@@ -220,6 +220,10 @@ npx prisma generate
 echo "📡 Connecting to external PostgreSQL database..."
 echo "🔗 Database URL: \${DATABASE_URL%@*}@***" # Hide password in logs
 
+# Fix any failed migrations from previous deployments
+echo "🔧 Checking for failed migrations..."
+node /app/scripts/fix-failed-migration.js || echo "⚠️  Migration fix failed, continuing anyway..."
+
 # Ensure PostgreSQL migrations are active
 echo "🔄 Setting up PostgreSQL migrations..."
 
