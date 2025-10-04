@@ -293,8 +293,8 @@ VOLUME ["/app/uploads", "/app/outputs", "/app/logs"]
 # Expose port (nginx will serve on 3000, backend on 3002)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# Health check - extended start period for database initialization
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Create startup script
