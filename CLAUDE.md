@@ -364,6 +364,35 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/controllers/project.controller.ts` - Added groupCount to API response
 - `frontend/src/components/credits/CreditUsageDisplay.tsx` - Removed Overview and Transaction History tabs
 
+## 🔧 CORS & Rate Limiting Fix (2025-10-05 21:20)
+
+### Final Resolution - ALL WORKING ✅
+
+**Problems Fixed**:
+1. ❌ CORS blocking frontend requests
+2. ❌ Rate limiting too aggressive (5 requests causing lockout)
+3. ❌ OPTIONS preflight requests counted in rate limit
+
+**Solutions Applied**:
+
+1. **CORS Configuration** (security.ts:192-221):
+   - Production: Hardcoded `https://private.lumiku.com` and `https://lumiku.com`
+   - Development: localhost:3000, localhost:3001
+   - No longer depends on environment variable
+   - Auto-detects via NODE_ENV
+
+2. **Smart Rate Limiting** (security.ts:20-35):
+   - Increased limit from 5 to 50 requests per 15 min
+   - `skipSuccessfulRequests: true` - Successful logins don't count
+   - `skip: OPTIONS` - CORS preflight excluded
+   - Failed attempts still counted for brute force protection
+
+3. **Database Connection** (Dockerfile:239-242):
+   - Removed problematic wait-for-db timeout
+   - Let Prisma handle connection with built-in retry
+
+**Status**: ✅ Login working, no CORS errors, rate limiting balanced
+
 ## 🔧 CORS Configuration Fix (2025-10-05 14:30)
 
 ### Issue Resolved

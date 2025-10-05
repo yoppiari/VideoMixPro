@@ -21,14 +21,17 @@ export const authRateLimit = process.env.NODE_ENV === 'development'
   ? (req: Request, res: Response, next: NextFunction) => next() // Skip in development
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // Relaxed from 5 to 100 for testing
+      max: 50, // Balanced limit: enough for testing, not too permissive
       message: {
         error: 'Too many authentication attempts from this IP, please try again later.',
         retryAfter: 900
       },
       standardHeaders: true,
       legacyHeaders: false,
-      skipSuccessfulRequests: true
+      skipSuccessfulRequests: true, // Don't count successful logins
+      skipFailedRequests: false, // Count failed attempts to prevent brute force
+      // Skip OPTIONS requests (CORS preflight)
+      skip: (req: Request) => req.method === 'OPTIONS'
     });
 
 export const uploadRateLimit = rateLimit({
