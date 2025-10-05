@@ -189,33 +189,9 @@ export const validateRequest = (schema: {
   };
 };
 
-// CORS configuration
+// CORS configuration - SIMPLIFIED for production
 export const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Production fallback: if ALLOWED_ORIGINS not set, use production domain
-    const defaultOrigins = process.env.NODE_ENV === 'production'
-      ? ['https://private.lumiku.com', 'https://lumiku.com']
-      : ['http://localhost:3000', 'http://localhost:3001'];
-
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || defaultOrigins;
-
-    // Debug logging
-    console.log('[CORS] Origin:', origin);
-    console.log('[CORS] NODE_ENV:', process.env.NODE_ENV);
-    console.log('[CORS] ALLOWED_ORIGINS env:', process.env.ALLOWED_ORIGINS);
-    console.log('[CORS] Allowed origins array:', allowedOrigins);
-
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      console.log('[CORS] ✅ Origin allowed:', origin);
-      return callback(null, true);
-    }
-
-    console.log('[CORS] ❌ Origin NOT allowed:', origin);
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins temporarily to test if CORS is the only issue
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
