@@ -58,7 +58,9 @@ RUN apk add --no-cache \
     nginx \
     supervisor \
     curl \
-    bash
+    bash \
+    netcat-openbsd \
+    postgresql-client
 
 # Create app user
 RUN addgroup -g 1001 -S appgroup && \
@@ -183,7 +185,7 @@ http {
 }
 EOF
 
-# Copy supervisor configuration (no PostgreSQL service)
+# Copy supervisor configuration (improved)
 COPY <<EOF /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
@@ -197,6 +199,8 @@ directory=/app
 user=appuser
 autostart=true
 autorestart=true
+startsecs=10
+startretries=3
 stderr_logfile=/var/log/supervisor/backend_stderr.log
 stdout_logfile=/var/log/supervisor/backend_stdout.log
 environment=NODE_ENV=production,PORT=3002
@@ -206,81 +210,79 @@ command=nginx -g "daemon off;"
 user=appuser
 autostart=true
 autorestart=true
+startsecs=5
 stderr_logfile=/var/log/supervisor/nginx_stderr.log
 stdout_logfile=/var/log/supervisor/nginx_stdout.log
-depends_on=backend
+priority=999
 EOF
 
-# Create database initialization script for external PostgreSQL
+# Create database initialization script for external PostgreSQL (simplified)
 COPY <<EOF /app/init-db.sh
 #!/bin/bash
 set -e
 
-echo "Initializing external PostgreSQL database..."
+echo "🚀 Initializing VideoMixPro Database..."
 
-# Force PostgreSQL configuration for Docker
-export DATABASE_PROVIDER="postgresql"
-echo "🔧 Docker container configured for PostgreSQL"
-
-# Validate required environment variables
+# 1. Validate environment
 if [ -z "\$DATABASE_URL" ]; then
-    echo "❌ ERROR: DATABASE_URL environment variable is required"
+    echo "❌ DATABASE_URL not set"
     exit 1
 fi
 
-# Generate PostgreSQL schema
-echo "📝 Generating PostgreSQL schema..."
-node scripts/generate-schema.js
+# Force PostgreSQL for production
+export DATABASE_PROVIDER="postgresql"
+export DOCKER_ENV="true"
 
-# Generate Prisma client for PostgreSQL
-echo "🔄 Generating Prisma client..."
-npx prisma generate
+# 2. Wait for database (with timeout)
+echo "⏳ Waiting for PostgreSQL..."
+TIMEOUT=60
+COUNT=0
 
-echo "📡 Connecting to external PostgreSQL database..."
-echo "🔗 Database URL: \${DATABASE_URL%@*}@***" # Hide password in logs
+# Extract host and port for netcat check
+DB_HOST=\$(echo \$DATABASE_URL | sed -e 's|^.*@\(.*\):.*\/.*\$|\1|')
+DB_PORT=\$(echo \$DATABASE_URL | sed -e 's|^.*:\([0-9]*\)\/.*\$|\1|')
 
-# Fix any failed migrations from previous deployments
-echo "🔧 Checking for failed migrations..."
-node /app/scripts/fix-failed-migration.js || echo "⚠️  Migration fix failed, continuing anyway..."
+if [ -n "\$DB_HOST" ] && [ -n "\$DB_PORT" ]; then
+    until nc -z "\$DB_HOST" "\$DB_PORT" > /dev/null 2>&1 || [ \$COUNT -eq \$TIMEOUT ]; do
+        COUNT=\$((COUNT + 1))
+        echo "   Attempt \$COUNT/\$TIMEOUT..."
+        sleep 1
+    done
 
-# Ensure PostgreSQL migrations are active
-echo "🔄 Setting up PostgreSQL migrations..."
-
-# Switch to PostgreSQL migrations if they exist
-if [ -d "/app/prisma/migrations-postgres" ]; then
-    echo "📂 Activating PostgreSQL migration directory..."
-    if [ -d "/app/prisma/migrations" ]; then
-        echo "⚠️  Removing existing SQLite migrations..."
-        rm -rf /app/prisma/migrations
+    if [ \$COUNT -eq \$TIMEOUT ]; then
+        echo "❌ Database timeout"
+        exit 1
     fi
-    cp -r /app/prisma/migrations-postgres /app/prisma/migrations
-    echo "✅ PostgreSQL migrations activated"
+    echo "✅ Database reachable"
 else
-    echo "⚠️  No migrations-postgres found in repository!"
-    echo "    Will fallback to db push if migrations fail..."
+    echo "⚠️  Could not parse host/port, skipping network check"
 fi
 
-# Apply database schema using db push (handles existing tables gracefully)
-echo "🔄 Applying database schema..."
-echo "📝 Using Prisma db push for safe schema synchronization..."
-
-# Use db push which is idempotent and handles existing tables
-npx prisma db push --accept-data-loss || {
-    echo "⚠️  DB push failed, trying without accept-data-loss..."
-    npx prisma db push
-}
-
-echo "✅ Database schema synchronized"
-
-# Generate Prisma client for runtime
-echo "🔧 Generating Prisma client..."
+# 3. Generate schema
+echo "📝 Generating schema..."
+node /app/scripts/generate-schema.js
 npx prisma generate
 
-# Create admin user
-echo "👤 Creating admin user..."
+# 4. Copy PostgreSQL migrations
+if [ -d "/app/prisma/migrations-postgres" ] && [ ! -d "/app/prisma/migrations" ]; then
+    echo "📂 Activating PostgreSQL migrations..."
+    cp -r /app/prisma/migrations-postgres /app/prisma/migrations
+fi
+
+# 5. Apply migrations (safe)
+echo "🔄 Applying migrations..."
+if npx prisma migrate deploy 2>&1; then
+    echo "✅ Migrations applied"
+else
+    echo "⚠️  Migrate failed, using db push..."
+    npx prisma db push --skip-generate
+fi
+
+# 6. Create admin (idempotent)
+echo "👤 Creating admin..."
 node /app/scripts/create-admin.js
 
-echo "🎉 Database initialization complete!"
+echo "✅ Database ready"
 EOF
 
 # Make init script executable
@@ -312,21 +314,29 @@ VOLUME ["/app/uploads", "/app/outputs", "/app/logs"]
 # Expose port (nginx will serve on 3000, backend on 3002)
 EXPOSE 3000
 
-# Health check - extended start period for database initialization
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+# Improved healthcheck - reduced start period with better retry
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-# Create startup script
+# Create startup script (improved)
 COPY <<EOF /app/start.sh
 #!/bin/bash
 set -e
 
-echo "🚀 Starting VideoMixPro with external PostgreSQL..."
+echo "🚀 Starting VideoMixPro..."
 
-# Initialize database with external PostgreSQL
-/app/init-db.sh
+# Initialize database (with better error handling)
+if /app/init-db.sh; then
+    echo "✅ Database initialized successfully"
+else
+    echo "❌ Database initialization failed"
+    echo "📋 Last 50 lines of logs:"
+    tail -n 50 /var/log/supervisor/*.log 2>/dev/null || echo "No logs available"
+    exit 1
+fi
 
-# Start supervisor to manage backend and nginx
+# Start services
+echo "🔄 Starting services (backend + nginx)..."
 exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 EOF
 

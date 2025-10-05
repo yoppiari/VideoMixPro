@@ -33,7 +33,10 @@
       "Bash(python3:*)",
       "Bash(for i in {180..1})",
       "Bash(do echo -ne \"\\rTime remaining: $i seconds \")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(cat:*)",
+      "Bash(set DATABASE_PROVIDER=sqlite)",
+      "Bash(timeout 60 npx prisma generate)"
     ],
     "deny": [],
     "ask": []

@@ -399,8 +399,83 @@ curl -X POST https://private.lumiku.com/api/v1/auth/login \
   - Credits: 1000
   - Role: ENTERPRISE
 
+## 🚀 Deployment Improvements (2025-10-05)
+
+### Deployment Fix Summary
+**Problem**: Container kept restarting/looping on Coolify deployment
+**Root Causes Identified**:
+1. Healthcheck timeout too long (120s)
+2. init-db.sh script too complex with risky operations
+3. No proper database wait mechanism
+4. Debug endpoints exposed in production
+5. Mixed SQLite/PostgreSQL migrations
+
+**Fixes Applied**:
+1. **Environment Separation**:
+   - Created `.env.local` for SQLite development
+   - Created `.env.production` for PostgreSQL production reference
+   - Updated `.gitignore` to protect production credentials
+
+2. **Debug Endpoint Security**:
+   - All debug endpoints now guarded with `process.env.NODE_ENV === 'development'`
+   - `/api/emergency-login`, `/api/test`, `/api/debug-login`, `/debug-env` protected
+   - Will not be exposed in production builds
+
+3. **Docker Improvements**:
+   - Added `netcat-openbsd` and `postgresql-client` to image
+   - Reduced healthcheck start period from 120s to 60s
+   - Improved supervisord configuration with `startsecs` and `priority`
+   - Simplified init-db.sh script (removed risky `--accept-data-loss`)
+   - Added proper database wait mechanism with timeout
+   - Better error handling in startup script
+
+4. **Migration Strategy**:
+   - Created `scripts/validate-migrations.js` to check PostgreSQL migrations
+   - Created `scripts/wait-for-db.sh` for robust database waiting
+   - Simplified migration process: `prisma migrate deploy` with fallback to `db push`
+
+5. **Deployment Automation**:
+   - Created `scripts/pre-deploy-check.js` - validates everything before build
+   - Created `scripts/build-for-production.sh` - automated build script
+   - Created `scripts/rollback.sh` - emergency rollback capability
+   - Created `DEPLOYMENT-CHECKLIST.md` - comprehensive deployment guide
+
+6. **Documentation**:
+   - Created `DEPLOYMENT-FIX-PLAN.md` - detailed reference for all changes
+   - Updated workflow for safe deployments
+
+### New Files Created:
+- `.env.local` - Local development environment (SQLite)
+- `.env.production` - Production reference (PostgreSQL)
+- `scripts/validate-migrations.js` - Migration validation
+- `scripts/wait-for-db.sh` - Database wait utility
+- `scripts/pre-deploy-check.js` - Pre-deployment validation
+- `scripts/build-for-production.sh` - Build automation
+- `scripts/rollback.sh` - Emergency rollback
+- `DEPLOYMENT-CHECKLIST.md` - Deployment checklist
+- `DEPLOYMENT-FIX-PLAN.md` - Complete fix documentation
+- `Dockerfile.backup` - Backup of original Dockerfile
+
+### Files Modified:
+- `Dockerfile` - Improved healthcheck, init-db.sh, supervisord, start.sh
+- `.gitignore` - Added `.env.production` to ignored files
+- `.env` - Switched to SQLite for local development
+- `src/index.ts` - Guarded debug endpoints
+- `src/routes/health.ts` - Guarded debug endpoints
+
+### Deployment Workflow:
+1. **Pre-Deployment**: `node scripts/pre-deploy-check.js`
+2. **Build**: `./scripts/build-for-production.sh` (optional local test)
+3. **Deploy**: `git push` (Coolify auto-rebuilds)
+4. **Monitor**: Watch logs for 5+ minutes
+5. **Rollback**: `./scripts/rollback.sh` if needed
+
+### Testing:
+- See `DEPLOYMENT-CHECKLIST.md` for complete testing procedure
+- See `DEPLOYMENT-FIX-PLAN.md` for troubleshooting guide
+
 ---
-Last Updated: 2025-10-05 12:10 WIB
+Last Updated: 2025-10-05 13:30 WIB
 Status: ✅ ALL SYSTEMS OPERATIONAL - PRODUCTION READY
 - Production URL: https://private.lumiku.com ✅
 - Backend server active on port 3002 ✅
@@ -413,4 +488,5 @@ Status: ✅ ALL SYSTEMS OPERATIONAL - PRODUCTION READY
 - Support for any video count (1+) ✅
 - Audio mode detection working ✅
 - Quality scaling maintains aspect ratio ✅
-- Ready for production use ✅
+- Deployment fixes applied ✅
+- Ready for production deployment ✅

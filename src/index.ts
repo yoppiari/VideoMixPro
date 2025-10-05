@@ -34,22 +34,87 @@ config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// EMERGENCY DEBUG - BEFORE ALL MIDDLEWARE
-app.use(express.json());
-app.post('/api/emergency-login', (req, res, next) => {
-  (async () => {
+// DEBUG ENDPOINTS - DEVELOPMENT ONLY
+if (process.env.NODE_ENV === 'development') {
+  app.use(express.json());
+  app.post('/api/emergency-login', (req, res, next) => {
+    (async () => {
+      try {
+        const bcrypt = await import('bcryptjs');
+        const jwt = await import('jsonwebtoken');
+        const { email, password } = req.body;
+
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+          return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
+        }
+
+        const isValid = await bcrypt.compare(password, user.password);
+
+        if (!isValid) {
+          return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
+        }
+
+        const token = jwt.sign(
+          { userId: user.id, email: user.email, licenseType: user.licenseType },
+          process.env.JWT_SECRET || 'fallback-secret',
+          { expiresIn: '24h' }
+        );
+
+        res.json({
+          success: true,
+          user: { id: user.id, email: user.email },
+          token,
+          debug: 'login_successful'
+        });
+      } catch (error) {
+        res.json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : 'No stack',
+          debug: 'exception_caught'
+        });
+      }
+    })().catch(next);
+  });
+}
+
+// Security middleware
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use(requestLogger);
+app.use(securityAudit);
+app.use(sanitizeInput);
+app.use(generalRateLimit);
+
+// Body parsing middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// DEBUG ENDPOINTS - DEVELOPMENT ONLY
+if (process.env.NODE_ENV === 'development') {
+  app.post('/api/test', (req, res) => {
+    res.json({ success: true, message: 'Test endpoint works', body: req.body });
+  });
+
+  app.post('/api/debug-login', async (req, res) => {
     try {
       const bcrypt = await import('bcryptjs');
       const jwt = await import('jsonwebtoken');
       const { email, password } = req.body;
 
+      logger.info('[DEBUG LOGIN] Request received:', { email });
+
       const user = await prisma.user.findUnique({ where: { email } });
+      logger.info('[DEBUG LOGIN] User found:', !!user);
 
       if (!user) {
         return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
       }
 
       const isValid = await bcrypt.compare(password, user.password);
+      logger.info('[DEBUG LOGIN] Password valid:', isValid);
 
       if (!isValid) {
         return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
@@ -68,6 +133,7 @@ app.post('/api/emergency-login', (req, res, next) => {
         debug: 'login_successful'
       });
     } catch (error) {
+      logger.error('[DEBUG LOGIN] Error:', error);
       res.json({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -75,71 +141,8 @@ app.post('/api/emergency-login', (req, res, next) => {
         debug: 'exception_caught'
       });
     }
-  })().catch(next);
-});
-
-// Security middleware
-app.use(securityHeaders);
-app.use(cors(corsOptions));
-app.use(requestLogger);
-app.use(securityAudit);
-app.use(sanitizeInput);
-app.use(generalRateLimit);
-
-// Body parsing middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// SIMPLE TEST - REMOVE IN PRODUCTION
-app.post('/api/test', (req, res) => {
-  res.json({ success: true, message: 'Test endpoint works', body: req.body });
-});
-
-// DEBUG: Bare metal login test - REMOVE IN PRODUCTION
-app.post('/api/debug-login', async (req, res) => {
-  try {
-    const bcrypt = await import('bcryptjs');
-    const jwt = await import('jsonwebtoken');
-    const { email, password } = req.body;
-
-    logger.info('[DEBUG LOGIN] Request received:', { email });
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    logger.info('[DEBUG LOGIN] User found:', !!user);
-
-    if (!user) {
-      return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
-    }
-
-    const isValid = await bcrypt.compare(password, user.password);
-    logger.info('[DEBUG LOGIN] Password valid:', isValid);
-
-    if (!isValid) {
-      return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, licenseType: user.licenseType },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      success: true,
-      user: { id: user.id, email: user.email },
-      token,
-      debug: 'login_successful'
-    });
-  } catch (error) {
-    logger.error('[DEBUG LOGIN] Error:', error);
-    res.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack',
-      debug: 'exception_caught'
-    });
-  }
-});
+  });
+}
 
 // Apply auth rate limiting to auth routes
 app.use('/api/v1/auth', authRateLimit, authRoutes);
