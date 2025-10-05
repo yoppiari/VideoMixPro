@@ -36,44 +36,46 @@ const port = process.env.PORT || 3000;
 
 // EMERGENCY DEBUG - BEFORE ALL MIDDLEWARE
 app.use(express.json());
-app.post('/api/emergency-login', async (req, res) => {
-  try {
-    const bcrypt = await import('bcryptjs');
-    const jwt = await import('jsonwebtoken');
-    const { email, password } = req.body;
+app.post('/api/emergency-login', (req, res, next) => {
+  (async () => {
+    try {
+      const bcrypt = await import('bcryptjs');
+      const jwt = await import('jsonwebtoken');
+      const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+      const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user) {
-      return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
+      if (!user) {
+        return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
+      }
+
+      const isValid = await bcrypt.compare(password, user.password);
+
+      if (!isValid) {
+        return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
+      }
+
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, licenseType: user.licenseType },
+        process.env.JWT_SECRET || 'fallback-secret',
+        { expiresIn: '24h' }
+      );
+
+      res.json({
+        success: true,
+        user: { id: user.id, email: user.email },
+        token,
+        debug: 'login_successful'
+      });
+    } catch (error) {
+      res.json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack',
+        debug: 'exception_caught'
+      });
     }
-
-    const isValid = await bcrypt.compare(password, user.password);
-
-    if (!isValid) {
-      return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, licenseType: user.licenseType },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      success: true,
-      user: { id: user.id, email: user.email },
-      token,
-      debug: 'login_successful'
-    });
-  } catch (error) {
-    res.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack',
-      debug: 'exception_caught'
-    });
-  }
+  })().catch(next);
 });
 
 // Security middleware
