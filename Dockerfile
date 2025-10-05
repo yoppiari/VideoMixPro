@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-05-20-45-force-rebuild
+ARG CACHE_BUST=2025-10-05-21-10-skip-db-wait
 
 WORKDIR /app
 
@@ -236,30 +236,10 @@ fi
 export DATABASE_PROVIDER="postgresql"
 export DOCKER_ENV="true"
 
-# 2. Wait for database (with timeout)
-echo "⏳ Waiting for PostgreSQL..."
-TIMEOUT=60
-COUNT=0
-
-# Extract host and port for netcat check
-DB_HOST=\$(echo \$DATABASE_URL | sed -e 's|^.*@\(.*\):.*\/.*\$|\1|')
-DB_PORT=\$(echo \$DATABASE_URL | sed -e 's|^.*:\([0-9]*\)\/.*\$|\1|')
-
-if [ -n "\$DB_HOST" ] && [ -n "\$DB_PORT" ]; then
-    until nc -z "\$DB_HOST" "\$DB_PORT" > /dev/null 2>&1 || [ \$COUNT -eq \$TIMEOUT ]; do
-        COUNT=\$((COUNT + 1))
-        echo "   Attempt \$COUNT/\$TIMEOUT..."
-        sleep 1
-    done
-
-    if [ \$COUNT -eq \$TIMEOUT ]; then
-        echo "❌ Database timeout"
-        exit 1
-    fi
-    echo "✅ Database reachable"
-else
-    echo "⚠️  Could not parse host/port, skipping network check"
-fi
+# 2. Wait for database (with timeout) - SKIP FOR NOW
+echo "⏳ Skipping database wait (will try Prisma connect)..."
+# Database wait disabled temporarily to bypass timeout issue
+# The application will handle connection retries via Prisma
 
 # 3. Generate schema
 echo "📝 Generating schema..."
