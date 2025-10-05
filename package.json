@@ -1,6 +1,6 @@
 {
   "name": "videomixpro",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Video Mixer Pro - SaaS platform for automated video mixing and A/B testing",
   "main": "dist/index.js",
   "_moduleAliases": {
