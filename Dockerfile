@@ -25,6 +25,9 @@ RUN npm run build
 # Stage 2: Build Backend
 FROM node:18-alpine AS backend-builder
 
+# Cache busting argument - change this to force rebuild
+ARG CACHE_BUST=2025-10-05-cors-fix
+
 WORKDIR /app
 
 # Install build dependencies for native modules
