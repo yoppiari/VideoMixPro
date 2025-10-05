@@ -43,8 +43,6 @@
     "src/controllers/admin.controller.ts",
     "src/controllers/payment.controller.ts",
     "src/controllers/group.controller.ts",
-    "src/controllers/user.controller.ts",
-    "src/controllers/video.controller.ts",
     "src/services/admin.service.ts",
     "src/services/payment.service.ts",
     "src/services/receipt.service.ts",

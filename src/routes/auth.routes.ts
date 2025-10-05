@@ -7,11 +7,6 @@ import { UserRegistrationSchema, UserLoginSchema, LicenseVerificationSchema } fr
 const router = Router();
 const authController = new AuthController();
 
-// Test endpoint without validation or database
-router.post('/test', (req, res) => {
-  res.json({ success: true, message: 'Auth route works', body: req.body });
-});
-
 router.post('/register', validateRequest(UserRegistrationSchema), authController.register.bind(authController));
 router.post('/login', validateRequest(UserLoginSchema), authController.login.bind(authController));
 router.post('/refresh', authController.refreshToken.bind(authController));
