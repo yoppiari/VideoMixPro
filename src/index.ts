@@ -26,8 +26,8 @@ import {
   securityAudit,
   corsOptions
 } from '@/middleware/security';
-import { cleanupService } from '@/services/cleanupService';
-import { backupService } from '@/services/backupService';
+// import { cleanupService } from '@/services/cleanupService'; // Disabled - excluded from build
+// import { backupService } from '@/services/backupService'; // Disabled - excluded from build
 
 config();
 
@@ -195,12 +195,12 @@ const cleanupStaleJobs = async (): Promise<void> => {
 process.on('SIGINT', async () => {
   logger.info('Shutting down gracefully...');
 
-  // Stop production services
-  if (process.env.NODE_ENV === 'production') {
-    cleanupService.stop();
-    backupService.stop();
-    logger.info('Production services stopped');
-  }
+  // Stop production services - DISABLED
+  // if (process.env.NODE_ENV === 'production') {
+  //   cleanupService.stop();
+  //   backupService.stop();
+  //   logger.info('Production services stopped');
+  // }
 
   await database.disconnect();
   process.exit(0);
@@ -209,12 +209,12 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   logger.info('Shutting down gracefully...');
 
-  // Stop production services
-  if (process.env.NODE_ENV === 'production') {
-    cleanupService.stop();
-    backupService.stop();
-    logger.info('Production services stopped');
-  }
+  // Stop production services - DISABLED
+  // if (process.env.NODE_ENV === 'production') {
+  //   cleanupService.stop();
+  //   backupService.stop();
+  //   logger.info('Production services stopped');
+  // }
 
   await database.disconnect();
   process.exit(0);
