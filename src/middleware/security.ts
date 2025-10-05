@@ -194,13 +194,20 @@ export const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'];
 
+    // Debug logging
+    console.log('[CORS] Origin:', origin);
+    console.log('[CORS] ALLOWED_ORIGINS env:', process.env.ALLOWED_ORIGINS);
+    console.log('[CORS] Allowed origins array:', allowedOrigins);
+
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
+      console.log('[CORS] ✅ Origin allowed:', origin);
       return callback(null, true);
     }
 
+    console.log('[CORS] ❌ Origin NOT allowed:', origin);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
