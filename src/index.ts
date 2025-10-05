@@ -88,9 +88,9 @@ app.use(securityAudit);
 app.use(sanitizeInput);
 app.use(generalRateLimit);
 
-// Body parsing middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Body parsing middleware - Allow large video uploads
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 
 // DEBUG ENDPOINTS - DEVELOPMENT ONLY
 if (process.env.NODE_ENV === 'development') {

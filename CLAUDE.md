@@ -411,6 +411,39 @@ Redesigned credit calculation to encourage large batch processing while protecti
 
 **Status**: ✅ CORS working, login page accessible
 
+## 🔧 Video Upload Size Limit Fix (2025-10-05)
+
+### Issue: 413 Request Entity Too Large
+**Problem**: Video uploads failing with nginx 413 error on production
+
+**Root Cause**: Coolify's nginx reverse proxy has default 1MB file upload limit
+
+**Solution Required**:
+1. **Coolify Dashboard Configuration**:
+   - Go to: https://cf.avolut.com → Applications → vidmix → Configuration
+   - Find: "Custom Nginx Configuration" section
+   - Add:
+     ```nginx
+     client_max_body_size 500M;
+     client_body_timeout 300s;
+     proxy_read_timeout 300s;
+     proxy_connect_timeout 300s;
+     proxy_send_timeout 300s;
+     ```
+   - Save and Redeploy
+
+2. **Backend Already Configured** ✅:
+   - Express body parser: 500MB limit (src/index.ts:92-93)
+   - Ready to handle large uploads once nginx allows it
+
+**Files Modified**:
+- `src/index.ts` - Increased Express limits from 50MB to 500MB
+- `nginx.conf` - Created reference config file
+
+**Status**: ⚠️ Requires manual Coolify configuration update
+
+---
+
 ## 🔧 Production Login Fix (2025-10-05)
 
 ### Login Issue Resolution
