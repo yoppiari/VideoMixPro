@@ -172,20 +172,15 @@ const ProjectDetail: React.FC = () => {
         name: project.name || '',
         description: project.description || '',
         metadata: {
-          static: project.settings?.metadata?.static || {},
-          includeDynamic: project.settings?.metadata?.includeDynamic || false,
-          fields: project.settings?.metadata?.fields || []
+          static: {},
+          includeDynamic: false,
+          fields: []
         }
       });
 
-      // Convert static metadata to array format for editing
-      const staticArray = Object.entries(project.settings?.metadata?.static || {})
-        .map(([key, value]) => ({ key, value: value as string }));
-      setStaticFields(staticArray.length > 0 ? staticArray : [{ key: '', value: '' }]);
-
-      // Set dynamic fields
-      const dynamicArray = project.settings?.metadata?.fields || [];
-      setDynamicFields(dynamicArray.length > 0 ? dynamicArray : ['']);
+      // Initialize with empty metadata
+      setStaticFields([{ key: '', value: '' }]);
+      setDynamicFields(['']);
     }
   }, [project, activeTab]);
 
@@ -322,15 +317,9 @@ const ProjectDetail: React.FC = () => {
       // Prepare update data
       const updateData = {
         name: editFormData.name,
-        description: editFormData.description,
-        settings: {
-          ...(project?.settings || {}),
-          metadata: {
-            static: staticMetadata,
-            includeDynamic: editFormData.metadata.includeDynamic,
-            fields: dynamicMetadataFields
-          }
-        }
+        description: editFormData.description
+        // Note: Project settings are no longer stored in database
+        // Settings are now per-job, not per-project
       };
 
       const response = await apiClient.updateProject(id!, updateData);
@@ -359,9 +348,9 @@ const ProjectDetail: React.FC = () => {
         name: project.name || '',
         description: project.description || '',
         metadata: {
-          static: project.settings?.metadata?.static || {},
-          includeDynamic: project.settings?.metadata?.includeDynamic || false,
-          fields: project.settings?.metadata?.fields || []
+          static: {},
+          includeDynamic: false,
+          fields: []
         }
       });
     }
@@ -668,7 +657,7 @@ const ProjectDetail: React.FC = () => {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-600">
-                      {project.videoGroups?.length || project.settings?.groups?.length || 0}
+                      {project.groups?.length || 0}
                     </div>
                     <div className="text-sm text-gray-500">Groups</div>
                   </div>
