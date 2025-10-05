@@ -47,7 +47,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // DEBUG: Bare metal login test - REMOVE IN PRODUCTION
-app.post('/debug-login', async (req, res) => {
+app.post('/api/debug-login', async (req, res) => {
   try {
     const bcrypt = await import('bcryptjs');
     const jwt = await import('jsonwebtoken');
