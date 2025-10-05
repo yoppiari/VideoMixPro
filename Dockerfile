@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-05-21-15-relax-rate-limit
+ARG CACHE_BUST=2025-10-05-22-00-nginx-upload-limit-fix
 
 WORKDIR /app
 
@@ -123,10 +123,15 @@ events {
 http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
-    
+
+    # Allow large video uploads
+    client_max_body_size 500M;
+    client_body_timeout 300s;
+    client_body_buffer_size 128k;
+
     access_log /var/log/nginx/access.log;
     error_log /var/log/nginx/error.log;
-    
+
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
     
@@ -154,6 +159,15 @@ http {
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_cache_bypass \$http_upgrade;
+
+            # Timeouts for large uploads
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+
+            # Buffering for large requests
+            proxy_request_buffering off;
+            proxy_buffering off;
         }
         
         # Health check endpoint

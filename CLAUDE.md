@@ -411,36 +411,36 @@ Redesigned credit calculation to encourage large batch processing while protecti
 
 **Status**: ✅ CORS working, login page accessible
 
-## 🔧 Video Upload Size Limit Fix (2025-10-05)
+## 🔧 Video Upload Size Limit Fix (2025-10-05) ✅ RESOLVED
 
 ### Issue: 413 Request Entity Too Large
 **Problem**: Video uploads failing with nginx 413 error on production
 
-**Root Cause**: Coolify's nginx reverse proxy has default 1MB file upload limit
+**Root Cause**: Internal nginx (inside Docker container) missing `client_max_body_size` directive
 
-**Solution Required**:
-1. **Coolify Dashboard Configuration**:
-   - Go to: https://cf.avolut.com → Applications → vidmix → Configuration
-   - Find: "Custom Nginx Configuration" section
-   - Add:
-     ```nginx
-     client_max_body_size 500M;
-     client_body_timeout 300s;
-     proxy_read_timeout 300s;
-     proxy_connect_timeout 300s;
-     proxy_send_timeout 300s;
-     ```
-   - Save and Redeploy
+**Solution Applied** ✅:
+1. **Internal Nginx Configuration** (Dockerfile:127-130):
+   - Added `client_max_body_size 500M;`
+   - Added `client_body_timeout 300s;`
+   - Added `client_body_buffer_size 128k;`
 
-2. **Backend Already Configured** ✅:
+2. **Proxy Timeouts & Buffering** (Dockerfile:163-170):
+   - Added `proxy_connect_timeout 300s;`
+   - Added `proxy_send_timeout 300s;`
+   - Added `proxy_read_timeout 300s;`
+   - Added `proxy_request_buffering off;` - Stream uploads directly
+   - Added `proxy_buffering off;` - Disable response buffering
+
+3. **Backend Already Configured** ✅:
    - Express body parser: 500MB limit (src/index.ts:92-93)
-   - Ready to handle large uploads once nginx allows it
+   - Multer middleware: 500MB limit (src/middleware/upload.middleware.ts:33)
 
 **Files Modified**:
+- `Dockerfile` - Added nginx upload limits and proxy timeouts
 - `src/index.ts` - Increased Express limits from 50MB to 500MB
-- `nginx.conf` - Created reference config file
+- `nginx.conf` - Reference config file (not used in production)
 
-**Status**: ⚠️ Requires manual Coolify configuration update
+**Status**: ✅ Fixed - Ready for deployment
 
 ---
 
