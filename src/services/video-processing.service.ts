@@ -537,10 +537,8 @@ export class VideoProcessingService {
               videos: true
             },
             orderBy: { order: 'asc' }
-          },
-          voiceOverFiles: {
-            orderBy: { order: 'asc' }
           }
+          // voiceOverFiles disabled - feature incomplete
         }
       });
 
@@ -562,13 +560,16 @@ export class VideoProcessingService {
         projectName: project.name,
         settings,
         isVoiceOverMode,
-        voiceOverCount: project.voiceOverFiles?.length || 0
+        voiceOverCount: 0 // project.voiceOverFiles?.length || 0 - disabled
       });
 
       // Voice Over Mode Processing
       if (isVoiceOverMode) {
         logger.info(`[Voice Over Mode] Processing ${data.outputCount} outputs with voice over`);
 
+        // Voice-over feature disabled - incomplete implementation
+        throw new Error('Voice over mode is currently disabled');
+        /*
         if (!project.voiceOverFiles || project.voiceOverFiles.length === 0) {
           throw new Error('Voice over mode requires at least one voice over file');
         }
@@ -578,6 +579,7 @@ export class VideoProcessingService {
           project.voiceOverFiles,
           data.outputCount
         );
+        */
 
         for (let i = 0; i < data.outputCount; i++) {
           // Check if job was cancelled
@@ -593,7 +595,7 @@ export class VideoProcessingService {
 
           const progress = Math.round((i / data.outputCount) * 80);
           const currentOutput = i + 1;
-          const voiceOver = voiceOverAssignments[i];
+          // const voiceOver = voiceOverAssignments[i]; // Disabled
 
           await this.updateJobStatusWithDetails(
             jobId,
@@ -602,9 +604,11 @@ export class VideoProcessingService {
             `Processing voice over output ${currentOutput}/${data.outputCount}`
           );
 
-          logger.info(`[Voice Over] Output ${currentOutput}: Using voice over "${voiceOver.originalName}"`);
+          // logger.info(`[Voice Over] Output ${currentOutput}: Using voice over "${voiceOver.originalName}"`);
 
-          // Process video with voice over
+          // Process video with voice over - DISABLED
+          throw new Error('Voice over mode is currently disabled');
+          /*
           const outputPath = await this.processVoiceOverOutput(
             project,
             voiceOver,
@@ -617,6 +621,7 @@ export class VideoProcessingService {
 
           // Note: Output files will be saved to database later via saveOutputFiles()
           // to avoid duplication
+          */
         }
       } else {
         // Normal processing mode
@@ -1582,13 +1587,15 @@ export class VideoProcessingService {
           created_at: new Date().toISOString()
         };
 
-        // Add voice-over specific metadata if applicable
+        // Add voice-over specific metadata if applicable - DISABLED
+        /*
         if (isVoiceOverMode && settings.voiceOverFiles && settings.voiceOverFiles[index]) {
           const voiceOver = settings.voiceOverFiles[index];
           settingsObj.voiceOverFile = voiceOver.originalName || voiceOver.filename;
           settingsObj.voiceOverDuration = voiceOver.duration;
           settingsObj.outputIndex = index;
         }
+        */
 
         return {
           jobId,

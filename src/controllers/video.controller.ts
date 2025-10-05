@@ -61,7 +61,7 @@ export class VideoController {
             data: {
               originalName: file.originalname,
               filename: file.filename,
-              path: file.path,
+              // path removed - not in schema, use filename instead
               mimeType: file.mimetype,
               size: file.size,
               duration: metadata.duration,
@@ -186,9 +186,10 @@ export class VideoController {
 
       // Delete file from storage
       try {
-        await fs.unlink(video.path);
+        const videoPath = path.join('uploads', video.filename);
+        await fs.unlink(videoPath);
       } catch (error) {
-        logger.warn(`Failed to delete file ${video.path}:`, error);
+        logger.warn(`Failed to delete file for video ${video.id}:`, error);
       }
 
       // Delete from database
@@ -226,7 +227,8 @@ export class VideoController {
       }
 
       try {
-        const metadata = await videoService.extractDetailedMetadata(video.path);
+        const videoPath = path.join('uploads', video.filename);
+        const metadata = await videoService.extractDetailedMetadata(videoPath);
         ResponseHelper.success(res, metadata);
       } catch (error) {
         logger.error('Extract metadata error:', error);

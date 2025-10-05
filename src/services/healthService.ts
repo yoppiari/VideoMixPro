@@ -93,14 +93,6 @@ export class HealthService {
           outputs: { count: 0, totalSize: 0 },
           temp: { count: 0, totalSize: 0 },
         },
-      },
-      environment: {
-        NODE_ENV: process.env.NODE_ENV,
-        DATABASE_PROVIDER: process.env.DATABASE_PROVIDER,
-        DATABASE_URL_SET: !!process.env.DATABASE_URL,
-        JWT_SECRET_SET: !!process.env.JWT_SECRET,
-        FRONTEND_URL: process.env.FRONTEND_URL,
-        DOCKER_ENV: process.env.DOCKER_ENV
       }
     };
   }

@@ -30,8 +30,8 @@ export class ProcessingController {
           videos: true,
           groups: {
             include: { videos: true }
-          },
-          voiceOverFiles: true // Include voice over files
+          }
+          // voiceOverFiles disabled - feature incomplete
         }
       });
 
@@ -81,11 +81,15 @@ export class ProcessingController {
 
       // Validate voice over requirements
       if (isVoiceOverMode) {
+        ResponseHelper.error(res, 'Voice over mode is currently disabled - feature incomplete', 400);
+        return;
+        /*
         if (!project.voiceOverFiles || project.voiceOverFiles.length === 0) {
           ResponseHelper.error(res, 'Voice over mode requires at least one voice over file to be uploaded', 400);
           return;
         }
         logger.info(`[Voice Over Mode] Processing with ${project.voiceOverFiles.length} voice over files`);
+        */
       }
 
       // Sanitize settings with safe defaults (removing problematic properties)
