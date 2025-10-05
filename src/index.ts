@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
-import { database } from '@/utils/database';
+import { database, prisma } from '@/utils/database';
 
 import logger from '@/utils/logger';
 import { ResponseHelper } from '@/utils/response';
@@ -59,6 +59,52 @@ app.use('/api/v1/processing', processingRoutes);
 
 // Health check endpoints
 app.use('/', healthRoutes);
+
+// DEBUG: Bare metal login test - REMOVE IN PRODUCTION
+app.post('/api/v1/auth/debug-login', async (req, res) => {
+  try {
+    const bcrypt = await import('bcryptjs');
+    const jwt = await import('jsonwebtoken');
+    const { email, password } = req.body;
+
+    logger.info('[DEBUG LOGIN] Request received:', { email });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    logger.info('[DEBUG LOGIN] User found:', !!user);
+
+    if (!user) {
+      return res.json({ success: false, error: 'User not found', debug: 'user_not_found' });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
+    logger.info('[DEBUG LOGIN] Password valid:', isValid);
+
+    if (!isValid) {
+      return res.json({ success: false, error: 'Invalid password', debug: 'password_mismatch' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, licenseType: user.licenseType },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      user: { id: user.id, email: user.email },
+      token,
+      debug: 'login_successful'
+    });
+  } catch (error) {
+    logger.error('[DEBUG LOGIN] Error:', error);
+    res.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack',
+      debug: 'exception_caught'
+    });
+  }
+});
 
 // API Info endpoint for root path
 app.get('/', (req, res) => {
