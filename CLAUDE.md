@@ -440,7 +440,20 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/index.ts` - Increased Express limits from 50MB to 500MB
 - `nginx.conf` - Reference config file (not used in production)
 
-**Status**: ✅ Fixed - Ready for deployment
+**Status**: ✅ Fixed - Deployed
+
+### Follow-up Fix: 405 Method Not Allowed (VideoUpload.tsx)
+**Problem**: After fixing nginx limits, uploads still failed with 405 error
+
+**Root Cause**: VideoUpload.tsx used `process.env.REACT_APP_API_BASE_URL` without fallback for production, resulting in wrong URL: `/projects/undefined/v1/videos/upload` instead of `/api/v1/videos/upload`
+
+**Solution** (VideoUpload.tsx:217-220):
+- Added fallback logic same as ApiClient
+- Production: `/api` (relative URL)
+- Development: `http://localhost:3002/api`
+
+**Files Modified**:
+- `frontend/src/components/videos/VideoUpload.tsx` - Added API_BASE_URL fallback
 
 ---
 

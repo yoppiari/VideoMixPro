@@ -214,7 +214,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({ projectId, embedded = false, 
           reject(new Error('Network error: Unable to connect to server'));
         });
 
-        xhr.open('POST', `${process.env.REACT_APP_API_BASE_URL}/v1/videos/upload`);
+        // Use relative URL in production, localhost in development
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ||
+          (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3002/api');
+        xhr.open('POST', `${API_BASE_URL}/v1/videos/upload`);
 
         // Add auth header
         const token = localStorage.getItem('authToken');
