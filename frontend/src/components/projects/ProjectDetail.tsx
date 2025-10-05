@@ -39,25 +39,18 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  status: string;
-  settings: {
-    mixingMode: string;
-    outputFormat: string;
-    quality: string;
-    outputCount: number;
-    metadata: {
-      static: Record<string, string>;
-      includeDynamic: boolean;
-      fields: string[];
-    };
-    groups?: Group[];
-  };
-  videoCount?: number;
-  videoFiles?: any[];
-  videoGroups?: Group[];
-  processingJobs?: any[];
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  processingJobs?: Array<{
+    id: string;
+    status: string;
+    progress: number;
+    createdAt: string;
+  }>;
+  videoCount?: number;
+  videos?: any[];
+  groups?: Group[];
 }
 
 const ProjectDetail: React.FC = () => {
@@ -221,19 +214,27 @@ const ProjectDetail: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const getProjectStatus = () => {
+    if (!project) return { label: 'Unknown', class: 'bg-gray-100 text-gray-800' };
+
+    // Derive status from processing jobs
+    const latestJob = project.processingJobs?.[0];
+    if (latestJob) {
+      switch (latestJob.status) {
+        case 'PROCESSING':
+          return { label: 'Processing', class: 'bg-yellow-100 text-yellow-800' };
+        case 'COMPLETED':
+          return { label: 'Completed', class: 'bg-green-100 text-green-800' };
+        case 'FAILED':
+          return { label: 'Failed', class: 'bg-red-100 text-red-800' };
+        default:
+          return { label: 'Pending', class: 'bg-blue-100 text-blue-800' };
+      }
     }
+
+    return project.isActive
+      ? { label: 'Active', class: 'bg-green-100 text-green-800' }
+      : { label: 'Inactive', class: 'bg-gray-100 text-gray-800' };
   };
 
   // Video selection handlers
@@ -596,8 +597,8 @@ const ProjectDetail: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusBadgeClass(project.status)}`}>
-                {project.status}
+              <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getProjectStatus().class}`}>
+                {getProjectStatus().label}
               </span>
               <button
                 onClick={handleEditProject}
@@ -735,7 +736,7 @@ const ProjectDetail: React.FC = () => {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Status</dt>
-                    <dd className="text-sm text-gray-900 capitalize">{project.status.toLowerCase()}</dd>
+                    <dd className="text-sm text-gray-900">{getProjectStatus().label}</dd>
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Total Videos</dt>
@@ -1030,7 +1031,7 @@ const ProjectDetail: React.FC = () => {
             )}
 
             {/* Job Monitor with Error Boundary */}
-            {(project.status === 'PROCESSING' || project.status === 'COMPLETED') && (
+            {project.processingJobs && project.processingJobs.length > 0 && (
               <div className="mt-6">
                 <ErrorBoundary
                   name="JobMonitor"
@@ -1043,7 +1044,7 @@ const ProjectDetail: React.FC = () => {
                 >
                   <JobMonitor
                     projectId={project.id}
-                    refreshInterval={project.status === 'PROCESSING' ? 15000 : 30000}
+                    refreshInterval={project.processingJobs[0]?.status === 'PROCESSING' ? 15000 : 30000}
                   />
                 </ErrorBoundary>
               </div>

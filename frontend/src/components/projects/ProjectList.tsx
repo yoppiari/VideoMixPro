@@ -7,17 +7,11 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  status: string;
   createdAt: string;
   updatedAt: string;
   videoCount: number;
   groupCount: number;
-  settings: {
-    mixingMode: string;
-    outputFormat: string;
-    quality: string;
-    outputCount: number;
-  };
+  isActive: boolean;
 }
 
 interface PaginationInfo {
@@ -45,7 +39,6 @@ const ProjectList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'createdAt' | 'updatedAt'>('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Load projects
   const loadProjects = async (page: number = 1) => {
@@ -97,10 +90,9 @@ const ProjectList: React.FC = () => {
   // Filter and sort projects locally (for demo purposes)
   const filteredAndSortedProjects = projects
     .filter(project => {
-      const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesSearch = project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (project.description && project.description?.toLowerCase().includes(searchTerm.toLowerCase()));
+      return matchesSearch;
     })
     .sort((a, b) => {
       let aValue: string | number;
@@ -108,17 +100,17 @@ const ProjectList: React.FC = () => {
 
       switch (sortBy) {
         case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
           break;
         case 'createdAt':
-          aValue = new Date(a.createdAt).getTime();
-          bValue = new Date(b.createdAt).getTime();
+          aValue = new Date(a.createdAt || 0).getTime();
+          bValue = new Date(b.createdAt || 0).getTime();
           break;
         case 'updatedAt':
         default:
-          aValue = new Date(a.updatedAt).getTime();
-          bValue = new Date(b.updatedAt).getTime();
+          aValue = new Date(a.updatedAt || 0).getTime();
+          bValue = new Date(b.updatedAt || 0).getTime();
           break;
       }
 
@@ -182,19 +174,17 @@ const ProjectList: React.FC = () => {
     });
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const getActiveBadge = (isActive: boolean) => {
+    if (isActive) {
+      return {
+        class: 'bg-green-100 text-green-800',
+        label: 'Active'
+      };
     }
+    return {
+      class: 'bg-gray-100 text-gray-800',
+      label: 'Inactive'
+    };
   };
 
   const renderPagination = () => {
@@ -323,7 +313,7 @@ const ProjectList: React.FC = () => {
 
         {/* Filters and Search */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div>
               <label htmlFor="search" className="block text-sm font-medium text-gray-700">
@@ -337,25 +327,6 @@ const ProjectList: React.FC = () => {
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Search by name or description..."
               />
-            </div>
-
-            {/* Status Filter */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                id="status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Statuses</option>
-                <option value="ACTIVE">Active</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="PROCESSING">Processing</option>
-                <option value="FAILED">Failed</option>
-              </select>
             </div>
 
             {/* Sort By */}
@@ -425,11 +396,11 @@ const ProjectList: React.FC = () => {
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">No projects found</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || statusFilter !== 'all'
+                {searchTerm
                   ? 'Try adjusting your search criteria.'
                   : 'Get started by creating your first project.'}
               </p>
-              {!searchTerm && statusFilter === 'all' && (
+              {!searchTerm && (
                 <div className="mt-6">
                   <button
                     onClick={handleCreateProject}
@@ -451,13 +422,7 @@ const ProjectList: React.FC = () => {
                         Project
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Settings
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Videos
+                        Videos / Groups
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Updated
@@ -470,7 +435,7 @@ const ProjectList: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredAndSortedProjects.map((project) => (
                       <tr key={project.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
                               {project.name}
@@ -480,17 +445,6 @@ const ProjectList: React.FC = () => {
                                 {project.description}
                               </div>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(project.status)}`}>
-                            {project.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div>
-                            <div>{project.settings.mixingMode} Mode</div>
-                            <div>{project.settings.outputFormat} • {project.settings.quality}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -545,12 +499,11 @@ const ProjectList: React.FC = () => {
                           </p>
                         )}
                         <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(project.status)}`}>
-                            {project.status}
-                          </span>
                           <span>{project.videoCount || 0} videos</span>
                           <span>{project.groupCount || 0} groups</span>
-                          <span>{formatDate(project.updatedAt)}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-400">
+                          {formatDate(project.updatedAt)}
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
