@@ -10,7 +10,7 @@
 
 ### Configuration
 - [ ] `.env.production` reviewed and updated
-- [ ] Environment variables validated
+- [ ] Environment variables validated (especially ALLOWED_ORIGINS for CORS)
 - [ ] Debug endpoints properly guarded with `NODE_ENV` check
 - [ ] No hardcoded credentials in code
 
