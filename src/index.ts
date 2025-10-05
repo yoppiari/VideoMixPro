@@ -46,6 +46,11 @@ app.use(generalRateLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// SIMPLE TEST - REMOVE IN PRODUCTION
+app.post('/api/test', (req, res) => {
+  res.json({ success: true, message: 'Test endpoint works', body: req.body });
+});
+
 // DEBUG: Bare metal login test - REMOVE IN PRODUCTION
 app.post('/api/debug-login', async (req, res) => {
   try {
