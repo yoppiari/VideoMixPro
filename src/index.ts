@@ -90,7 +90,22 @@ app.use('*', (req, res) => {
 
 app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', error);
-  ResponseHelper.serverError(res, 'Something went wrong');
+  logger.error('Error stack:', error.stack);
+
+  // Temporary debug mode - REMOVE IN PRODUCTION
+  if (process.env.NODE_ENV === 'production') {
+    res.status(500).json({
+      success: false,
+      error: 'Something went wrong',
+      debug: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      }
+    });
+  } else {
+    ResponseHelper.serverError(res, 'Something went wrong');
+  }
 });
 
 const startServer = async (): Promise<void> => {
