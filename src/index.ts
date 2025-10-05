@@ -46,20 +46,6 @@ app.use(generalRateLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Apply auth rate limiting to auth routes
-app.use('/api/v1/auth', authRateLimit, authRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/projects', projectRoutes);
-app.use('/api/v1/videos', videoRoutes);
-// app.use('/api/v1/groups', groupRoutes); // Disabled - missing VideoFile model
-app.use('/api/v1/processing', processingRoutes);
-// app.use('/api/v1/voiceover', voiceOverRoutes); // Disabled - incomplete implementation
-// app.use('/api/v1/payments', paymentRoutes); // Disabled - missing Payment model
-// app.use('/api/v1/admin', adminRoutes); // Disabled - missing EmailLog/Payment models
-
-// Health check endpoints
-app.use('/', healthRoutes);
-
 // DEBUG: Bare metal login test - REMOVE IN PRODUCTION
 app.post('/api/v1/auth/debug-login', async (req, res) => {
   try {
@@ -105,6 +91,20 @@ app.post('/api/v1/auth/debug-login', async (req, res) => {
     });
   }
 });
+
+// Apply auth rate limiting to auth routes
+app.use('/api/v1/auth', authRateLimit, authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/projects', projectRoutes);
+app.use('/api/v1/videos', videoRoutes);
+// app.use('/api/v1/groups', groupRoutes); // Disabled - missing VideoFile model
+app.use('/api/v1/processing', processingRoutes);
+// app.use('/api/v1/voiceover', voiceOverRoutes); // Disabled - incomplete implementation
+// app.use('/api/v1/payments', paymentRoutes); // Disabled - missing Payment model
+// app.use('/api/v1/admin', adminRoutes); // Disabled - missing EmailLog/Payment models
+
+// Health check endpoints
+app.use('/', healthRoutes);
 
 // API Info endpoint for root path
 app.get('/', (req, res) => {
