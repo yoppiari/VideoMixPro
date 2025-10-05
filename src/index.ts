@@ -186,7 +186,15 @@ app.use('*', (req, res) => {
 app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', error);
   logger.error('Error stack:', error.stack);
-  ResponseHelper.serverError(res, 'Something went wrong');
+  // EXPOSE ACTUAL ERROR FOR DEBUGGING
+  res.status(500).json({
+    success: false,
+    error: error.message || 'Unknown error',
+    name: error.name || 'Error',
+    stack: error.stack || 'No stack trace',
+    type: typeof error,
+    details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+  });
 });
 
 const startServer = async (): Promise<void> => {
