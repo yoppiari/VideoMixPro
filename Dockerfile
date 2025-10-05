@@ -166,6 +166,11 @@ http {
             proxy_pass http://localhost:3002/debug-login;
         }
 
+        # Emergency login endpoint
+        location /emergency-login {
+            proxy_pass http://localhost:3002/emergency-login;
+        }
+
         # React Router - serve index.html for all routes
         location / {
             try_files \$uri \$uri/ /index.html;
