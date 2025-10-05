@@ -57,7 +57,6 @@
     "src/services/auto-mixing.service.ts",
     "src/services/retry.service.ts",
     "src/middleware/admin.middleware.ts",
-    "src/middleware/security.ts",
     "src/workers/index.ts"
   ]
 }
