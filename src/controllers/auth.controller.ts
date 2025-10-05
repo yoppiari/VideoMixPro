@@ -104,7 +104,21 @@ export class AuthController {
       logger.error('[Login] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       logger.error('[Login] JWT_SECRET set:', !!process.env.JWT_SECRET);
       logger.error('[Login] DATABASE_URL set:', !!process.env.DATABASE_URL);
-      ResponseHelper.serverError(res, 'Login failed');
+
+      // Temporary debug info - REMOVE IN PRODUCTION
+      const debugInfo = {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack',
+        jwtSecretSet: !!process.env.JWT_SECRET,
+        databaseUrlSet: !!process.env.DATABASE_URL,
+        nodeEnv: process.env.NODE_ENV
+      };
+
+      res.status(500).json({
+        success: false,
+        error: 'Login failed',
+        debug: debugInfo
+      });
     }
   }
 
