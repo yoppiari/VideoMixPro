@@ -364,6 +364,24 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/controllers/project.controller.ts` - Added groupCount to API response
 - `frontend/src/components/credits/CreditUsageDisplay.tsx` - Removed Overview and Transaction History tabs
 
+## 🔧 CORS Configuration Fix (2025-10-05 14:30)
+
+### Issue Resolved
+**Problem**: Frontend showing "Not allowed by CORS" error at login page
+
+**Root Cause**: CORS middleware was using environment variable `ALLOWED_ORIGINS` which wasn't set in production, falling back to localhost origins only
+
+**Solution**: Simplified CORS configuration to use NODE_ENV directly:
+- Production: Hardcoded to allow `https://private.lumiku.com` and `https://lumiku.com`
+- Development: Localhost origins (3000, 3001)
+- No longer depends on `ALLOWED_ORIGINS` environment variable
+
+**Files Modified**:
+- `src/middleware/security.ts` - Simplified CORS logic (security.ts:192-221)
+- `Dockerfile` - Added cache-busting ARG to force rebuilds
+
+**Status**: ✅ CORS working, login page accessible
+
 ## 🔧 Production Login Fix (2025-10-05)
 
 ### Login Issue Resolution
