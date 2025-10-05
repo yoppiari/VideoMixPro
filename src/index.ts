@@ -36,7 +36,7 @@ const port = process.env.PORT || 3000;
 
 // EMERGENCY DEBUG - BEFORE ALL MIDDLEWARE
 app.use(express.json());
-app.post('/emergency-login', async (req, res) => {
+app.post('/api/emergency-login', async (req, res) => {
   try {
     const bcrypt = await import('bcryptjs');
     const jwt = await import('jsonwebtoken');
