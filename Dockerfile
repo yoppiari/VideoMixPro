@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-05-cors-final-fix
+ARG CACHE_BUST=2025-10-05-20-45-force-rebuild
 
 WORKDIR /app
 

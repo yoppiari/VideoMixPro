@@ -162,9 +162,10 @@ app.use('/', healthRoutes);
 app.get('/', (req, res) => {
   const apiInfo = {
     success: true,
-    message: 'VideoMixPro API Server',
-    version: '1.0.0',
+    message: 'VideoMixPro API Server - CORS FIXED',
+    version: '1.0.1',
     environment: process.env.NODE_ENV || 'development',
+    corsEnabled: true,
     endpoints: {
       health: '/health',
       api: '/api/v1',
