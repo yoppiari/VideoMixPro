@@ -192,10 +192,16 @@ export const validateRequest = (schema: {
 // CORS configuration
 export const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'];
+    // Production fallback: if ALLOWED_ORIGINS not set, use production domain
+    const defaultOrigins = process.env.NODE_ENV === 'production'
+      ? ['https://private.lumiku.com', 'https://lumiku.com']
+      : ['http://localhost:3000', 'http://localhost:3001'];
+
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || defaultOrigins;
 
     // Debug logging
     console.log('[CORS] Origin:', origin);
+    console.log('[CORS] NODE_ENV:', process.env.NODE_ENV);
     console.log('[CORS] ALLOWED_ORIGINS env:', process.env.ALLOWED_ORIGINS);
     console.log('[CORS] Allowed origins array:', allowedOrigins);
 
