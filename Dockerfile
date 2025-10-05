@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-05-21-10-skip-db-wait
+ARG CACHE_BUST=2025-10-05-21-15-relax-rate-limit
 
 WORKDIR /app
 
