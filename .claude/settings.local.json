@@ -29,7 +29,11 @@
       "Bash(curl -X POST http://localhost:3002/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"\"email\"\":\"\"admin@videomix.pro\"\",\"\"password\"\":\"\"Admin123!\"\"}')",
       "Bash(curl:*)",
       "Bash(npx kill-port:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(python3:*)",
+      "Bash(for i in {180..1})",
+      "Bash(do echo -ne \"\\rTime remaining: $i seconds \")",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
