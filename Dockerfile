@@ -138,9 +138,9 @@ http {
             add_header Cache-Control "public, immutable";
         }
         
-        # API proxy to backend
+        # API proxy to backend - preserve full path
         location /api/ {
-            proxy_pass http://localhost:3002;
+            proxy_pass http://localhost:3002/api/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$http_upgrade;
             proxy_set_header Connection 'upgrade';
