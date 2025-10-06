@@ -503,6 +503,35 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/utils/validation.ts` - Fixed MAX_FILE_SIZE fallback
 - `Dockerfile` - Added MAX_FILE_SIZE and UPLOAD_PATH env vars
 
+### Follow-up Fix: Comprehensive Safety Checks for MAX_FILE_SIZE
+**Problem**: Even after adding Dockerfile env vars, still getting "0MB per file"
+
+**Root Cause**: Coolify may override Dockerfile ENV vars, and parseInt() can return NaN/0
+
+**Solution - Multi-Layer Safety**:
+1. **Check before parseInt**: Only parseInt if env variable exists
+2. **Validate after parseInt**: Check result is not NaN, 0, or negative
+3. **Hardcoded fallback**: Always use 524288000 (500MB) if validation fails
+4. **Debug logging**: Log actual env value to identify issue
+
+**Implementation**:
+```typescript
+// Layer 1: Conditional parseInt
+const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE
+  ? parseInt(process.env.MAX_FILE_SIZE)
+  : 524288000;
+
+// Layer 2: Validation check
+const SAFE_MAX_FILE_SIZE = (!MAX_FILE_SIZE || MAX_FILE_SIZE <= 0 || isNaN(MAX_FILE_SIZE))
+  ? 524288000
+  : MAX_FILE_SIZE;
+```
+
+**Files Modified**:
+- `src/middleware/upload.middleware.ts` - Added SAFE_MAX_FILE_SIZE validation
+- `src/index.ts` - Added safety check in error handler
+- `src/utils/validation.ts` - Added safety check in validateFileSize
+
 ---
 
 ## 🔧 Production Login Fix (2025-10-05)
