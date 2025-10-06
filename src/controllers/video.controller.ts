@@ -98,8 +98,14 @@ export class VideoController {
         }
       }
 
+      // Convert BigInt to string for JSON serialization
+      const uploadedWithStringSize = uploadedVideos.map(v => ({
+        ...v,
+        size: typeof v.size === 'bigint' ? v.size.toString() : v.size
+      }));
+
       const response = {
-        uploaded: uploadedVideos,
+        uploaded: uploadedWithStringSize,
         errors: errors.length > 0 ? errors : undefined
       };
 
@@ -142,9 +148,10 @@ export class VideoController {
         ]
       });
 
-      // Add status field to each video (since VideoFile model doesn't have status field)
+      // Add status field and convert BigInt to string for JSON serialization
       const videosWithStatus = videos.map(video => ({
         ...video,
+        size: typeof video.size === 'bigint' ? video.size.toString() : video.size,
         status: 'READY', // Default status for all uploaded videos
         metadata: {
           static: {},

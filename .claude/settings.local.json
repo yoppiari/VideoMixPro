@@ -21,7 +21,10 @@
       "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/projects/cmgeofckh0001lf6gz0e2m43r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3MzU3OTQsImV4cCI6MTc1OTgyMjE5NH0.LRZFv-dbnV8XKg8aVBxNqh2SSFjUF6CHs9TzpwgUxwY\")",
       "Bash(for i in {60..1})",
       "Bash(do echo -ne \"\\rWaiting for deployment... $i seconds remaining\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(for i in {1..6})",
+      "Bash(do echo \"Attempt $i/6...\")",
+      "Bash(break)"
     ],
     "deny": [],
     "ask": []
