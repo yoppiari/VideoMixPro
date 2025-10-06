@@ -31,14 +31,20 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   cb(null, true);
 };
 
+const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE
+  ? parseInt(process.env.MAX_FILE_SIZE)
+  : 524288000; // 500MB default
+
 const limits = {
-  fileSize: parseInt(process.env.MAX_FILE_SIZE || '524288000'), // 500MB per file
+  fileSize: MAX_FILE_SIZE, // 500MB per file
   files: 50, // max 50 files
   fields: 100, // max 100 non-file fields
   fieldSize: 10 * 1024 * 1024, // 10MB max field value size
   parts: 150, // max 150 parts (files + fields)
   headerPairs: 2000 // max 2000 header pairs
 };
+
+logger.info(`Upload middleware configured with max file size: ${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}MB`);
 
 export const uploadMiddleware = multer({
   storage,

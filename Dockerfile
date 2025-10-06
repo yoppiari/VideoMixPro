@@ -294,6 +294,8 @@ ENV JWT_SECRET="videomixpro-production-jwt-secret-2024-lumiku-secure-key-change-
 ENV FRONTEND_URL="https://private.lumiku.com"
 ENV USE_IN_MEMORY_QUEUE=true
 ENV REDIS_URL="redis://localhost:6379"
+ENV MAX_FILE_SIZE=524288000
+ENV UPLOAD_PATH=/app/uploads
 
 # Create supervisor log directory and set permissions
 RUN mkdir -p /var/log/supervisor /var/run/supervisor && \

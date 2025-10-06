@@ -480,6 +480,29 @@ Redesigned credit calculation to encourage large batch processing while protecti
 - `src/middleware/upload.middleware.ts` - Enhanced limits and logging
 - `src/index.ts` - Added MulterError-specific error handler
 
+### Follow-up Fix: MAX_FILE_SIZE Environment Variable
+**Problem**: Error message showed "0MB per file" - env variable not set in production
+
+**Root Cause**: `parseInt(process.env.MAX_FILE_SIZE || '524288000')` doesn't work correctly when env is undefined - parseInt(undefined) returns NaN, and NaN || '524288000' still evaluates incorrectly
+
+**Solution**:
+1. **Proper Fallback Logic**:
+   - Changed to: `process.env.MAX_FILE_SIZE ? parseInt(...) : 524288000`
+   - Applied to upload.middleware.ts, index.ts, and validation.ts
+
+2. **Environment Variables** (Dockerfile:297-298):
+   - Added `MAX_FILE_SIZE=524288000` (500MB)
+   - Added `UPLOAD_PATH=/app/uploads`
+
+3. **Logging** (upload.middleware.ts:47):
+   - Log configured file size limit on startup
+
+**Files Modified**:
+- `src/middleware/upload.middleware.ts` - Fixed MAX_FILE_SIZE fallback + logging
+- `src/index.ts` - Fixed MAX_FILE_SIZE fallback in error handler
+- `src/utils/validation.ts` - Fixed MAX_FILE_SIZE fallback
+- `Dockerfile` - Added MAX_FILE_SIZE and UPLOAD_PATH env vars
+
 ---
 
 ## 🔧 Production Login Fix (2025-10-05)

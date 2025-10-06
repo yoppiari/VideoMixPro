@@ -73,7 +73,9 @@ export const validateFileType = (mimetype: string): boolean => {
 };
 
 export const validateFileSize = (size: number): boolean => {
-  const maxSize = parseInt(process.env.MAX_FILE_SIZE || '524288000'); // 500MB default
+  const maxSize = process.env.MAX_FILE_SIZE
+    ? parseInt(process.env.MAX_FILE_SIZE)
+    : 524288000; // 500MB default
   return size <= maxSize;
 };
 
