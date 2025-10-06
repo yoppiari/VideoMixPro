@@ -20,22 +20,27 @@ export interface DetailedVideoMetadata extends VideoMetadata {
 
 export class VideoService {
   constructor() {
-    // Set FFmpeg paths if configured
-    const ffmpegPath = process.env.FFMPEG_PATH;
-    const ffprobePath = process.env.FFPROBE_PATH;
+    try {
+      // Set FFmpeg paths if configured
+      const ffmpegPath = process.env.FFMPEG_PATH;
+      const ffprobePath = process.env.FFPROBE_PATH;
 
-    if (ffmpegPath) {
-      ffmpeg.setFfmpegPath(ffmpegPath);
-      logger.info(`FFmpeg path set to: ${ffmpegPath}`);
-    } else {
-      logger.warn('FFMPEG_PATH not set, using system default');
-    }
+      if (ffmpegPath) {
+        ffmpeg.setFfmpegPath(ffmpegPath);
+        logger.info(`FFmpeg path set to: ${ffmpegPath}`);
+      } else {
+        logger.warn('FFMPEG_PATH not set, using system default');
+      }
 
-    if (ffprobePath) {
-      ffmpeg.setFfprobePath(ffprobePath);
-      logger.info(`FFprobe path set to: ${ffprobePath}`);
-    } else {
-      logger.warn('FFPROBE_PATH not set, using system default');
+      if (ffprobePath) {
+        ffmpeg.setFfprobePath(ffprobePath);
+        logger.info(`FFprobe path set to: ${ffprobePath}`);
+      } else {
+        logger.warn('FFPROBE_PATH not set, using system default');
+      }
+    } catch (error) {
+      // Don't crash if logger fails, just continue
+      console.error('VideoService constructor error:', error);
     }
   }
 
