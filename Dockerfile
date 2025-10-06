@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-06-02-20-safe-max-file-size-fix
+ARG CACHE_BUST=2025-10-06-15-44-frontend-field-fix
 
 WORKDIR /app
 
