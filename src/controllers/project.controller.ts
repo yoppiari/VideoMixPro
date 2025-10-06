@@ -55,6 +55,11 @@ export class ProjectController {
       ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get projects error:', error);
+      logger.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      });
       ResponseHelper.serverError(res, 'Failed to get projects');
     }
   }

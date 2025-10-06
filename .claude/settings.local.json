@@ -36,7 +36,9 @@
       "Bash(done)",
       "Bash(cat:*)",
       "Bash(set DATABASE_PROVIDER=sqlite)",
-      "Bash(timeout 60 npx prisma generate)"
+      "Bash(timeout 60 npx prisma generate)",
+      "Bash(do echo -ne \"\\rWaiting for deployment... $i seconds remaining\")",
+      "Bash(process video file\" error.\n\nSolution:\n- Added FFMPEG_PATH=/usr/bin/ffmpeg to Dockerfile ENV\n- Added FFPROBE_PATH=/usr/bin/ffprobe to Dockerfile ENV\n- Added logging in VideoService constructor to show which paths are used\n- Added warning if paths not set (fallback to system default)\n\nThis fixes the 500 error on video upload after file successfully uploaded.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
