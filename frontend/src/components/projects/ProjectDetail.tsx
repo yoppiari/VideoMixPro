@@ -15,17 +15,29 @@ interface Video {
   id: string;
   filename: string;
   originalName: string;
-  size: number;
-  duration: number;
-  format: string;
-  thumbnailUrl?: string;
-  groupId?: string;
-  metadata: {
-    static: Record<string, string>;
-    dynamic: Record<string, any>;
+  mimeType: string;  // Changed from format
+  size: number | string; // Can be string from BigInt
+  duration?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  bitrate?: number;
+  codec?: string;
+  hasAudio?: boolean;
+  thumbnailUrl?: string | null;
+  projectId: string;
+  groupId?: string | null;
+  uploadedAt: string;  // Changed from createdAt
+  status?: 'READY' | 'PROCESSING' | 'FAILED';
+  group?: {
+    id: string;
+    name: string;
+    order: number;
+  } | null;
+  metadata?: {
+    static: Record<string, any>;
+    dynamic?: Record<string, any>;
   };
-  status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED';
-  createdAt: string;
 }
 
 interface Group {
@@ -195,12 +207,13 @@ const ProjectDetail: React.FC = () => {
     });
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+  const formatFileSize = (bytes: number | string): string => {
+    const numBytes = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+    if (numBytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    const i = Math.floor(Math.log(numBytes) / Math.log(k));
+    return parseFloat((numBytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const formatDuration = (seconds: number): string => {
@@ -888,7 +901,7 @@ const ProjectDetail: React.FC = () => {
                       </div>
 
                       {/* Duration */}
-                      {video.duration > 0 && (
+                      {video.duration && video.duration > 0 && (
                         <div className="absolute bottom-2 right-2">
                           <span className="bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                             {formatDuration(video.duration)}

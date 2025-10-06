@@ -24,7 +24,16 @@
       "Bash(done)",
       "Bash(for i in {1..6})",
       "Bash(do echo \"Attempt $i/6...\")",
-      "Bash(break)"
+      "Bash(break)",
+      "Bash(for i in {90..1})",
+      "Bash(do sleep:*)",
+      "Bash(curl -s -X GET \"https://cf.avolut.com/api/v1/applications/osgk488wo0w0kgck84cwk40k/logs\" -H \"Authorization: Bearer 5|CJbL8liBi6ra65UfLhGlru4YexDVur9U86E9ZxYGc478ab97\")",
+      "Bash(npx kill-port:*)",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/projects?page=1&limit=10\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3NjUyMDAsImV4cCI6MTc1OTg1MTYwMH0.kMod74hei8E2z8xJfCyJZQ-S5bXQSUyCA5pNvUAh4Jc\")",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/projects/cmgeofckh0001lf6gz0e2m43r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3NjUyMDAsImV4cCI6MTc1OTg1MTYwMH0.kMod74hei8E2z8xJfCyJZQ-S5bXQSUyCA5pNvUAh4Jc\")",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/videos?projectId=cmgeofckh0001lf6gz0e2m43r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3NjUyMDAsImV4cCI6MTc1OTg1MTYwMH0.kMod74hei8E2z8xJfCyJZQ-S5bXQSUyCA5pNvUAh4Jc\")",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/videos/project/cmgeofckh0001lf6gz0e2m43r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3NjUyMDAsImV4cCI6MTc1OTg1MTYwMH0.kMod74hei8E2z8xJfCyJZQ-S5bXQSUyCA5pNvUAh4Jc\")",
+      "Bash(timeout 180 npm run build)"
     ],
     "deny": [],
     "ask": []

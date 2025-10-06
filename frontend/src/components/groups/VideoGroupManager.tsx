@@ -13,8 +13,8 @@ import apiClient from '../../utils/api/client';
 interface VideoFile {
   id: string;
   originalName: string;
-  duration: number;
-  size: number;
+  duration?: number;  // Made optional to match actual Video type
+  size: number | string;  // Can be string from BigInt
   createdAt?: string;
   uploadedAt?: string;
   groupId?: string | null;
@@ -267,8 +267,9 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatSize = (bytes: number) => {
-    const mb = bytes / (1024 * 1024);
+  const formatSize = (bytes: number | string) => {
+    const numBytes = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+    const mb = numBytes / (1024 * 1024);
     return `${mb.toFixed(1)} MB`;
   };
 
@@ -375,7 +376,7 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
                             {video.originalName}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {formatDuration(video.duration)} • {formatSize(video.size)}
+                            {video.duration ? formatDuration(video.duration) : 'N/A'} • {formatSize(video.size)}
                           </p>
                         </div>
                       </div>
@@ -448,7 +449,7 @@ export const VideoGroupManager: React.FC<VideoGroupManagerProps> = ({
                       {video.originalName}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {formatDuration(video.duration)} • {formatSize(video.size)}
+                      {video.duration ? formatDuration(video.duration) : 'N/A'} • {formatSize(video.size)}
                     </p>
                   </div>
                 </div>
