@@ -19,22 +19,10 @@ export class ProjectController {
       const limitNum = parseInt(limit, 10);
       const skip = (pageNum - 1) * limitNum;
 
+      // Simplified query to isolate issue
       const [projects, total] = await Promise.all([
         prisma.project.findMany({
           where: { userId },
-          include: {
-            videos: {
-              select: { id: true, originalName: true, size: true, duration: true }
-            },
-            groups: {
-              select: { id: true, name: true, order: true }
-            },
-            processingJobs: {
-              select: { id: true, status: true, progress: true, createdAt: true },
-              orderBy: { createdAt: 'desc' },
-              take: 1
-            }
-          },
           orderBy: { updatedAt: 'desc' },
           skip,
           take: limitNum
@@ -47,9 +35,8 @@ export class ProjectController {
       // Parse settings for each project and add counts
       const projectsWithParsedSettings = projects.map(project => ({
         ...project,
-        
-        videoCount: project.videos.length,
-        groupCount: project.groups.length
+        videoCount: 0,
+        groupCount: 0
       }));
 
       ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);
