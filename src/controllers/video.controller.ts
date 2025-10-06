@@ -52,7 +52,9 @@ export class VideoController {
 
       for (const file of files) {
         try {
+          logger.info(`Processing file: ${file.filename}, size: ${file.size}, path: ${file.path}`);
           const metadata = await videoService.extractMetadata(file.path);
+          logger.info(`Metadata extracted for ${file.filename}:`, metadata);
 
           // Parse resolution string (e.g., "1920x1080") into width and height
           const [width, height] = metadata.resolution ? metadata.resolution.split('x').map(Number) : [0, 0];
@@ -63,7 +65,7 @@ export class VideoController {
               filename: file.filename,
               // path removed - not in schema, use filename instead
               mimeType: file.mimetype,
-              size: file.size,
+              size: BigInt(file.size), // Convert to BigInt for PostgreSQL
               duration: metadata.duration,
               width: width || 0,
               height: height || 0,
@@ -78,6 +80,10 @@ export class VideoController {
           uploadedVideos.push(videoFile);
         } catch (error) {
           logger.error(`Failed to process file ${file.filename}:`, error);
+          logger.error('Error details:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+          });
           errors.push({
             filename: file.filename,
             error: 'Failed to process video file'
