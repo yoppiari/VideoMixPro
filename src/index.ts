@@ -198,7 +198,11 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':
-        const maxSize = process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : 524288000;
+        let maxSize = process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : 524288000;
+        // Safety check for invalid values
+        if (!maxSize || maxSize <= 0 || isNaN(maxSize)) {
+          maxSize = 524288000; // 500MB default
+        }
         message = `File too large. Maximum size is ${Math.floor(maxSize / 1024 / 1024)}MB per file`;
         break;
       case 'LIMIT_FILE_COUNT':

@@ -31,12 +31,19 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   cb(null, true);
 };
 
+// Maximum file size: 500MB (524,288,000 bytes)
+// Use env variable if set, otherwise use hardcoded default
 const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE
   ? parseInt(process.env.MAX_FILE_SIZE)
   : 524288000; // 500MB default
 
+// Safety check: if parseInt fails or returns invalid value, use default
+const SAFE_MAX_FILE_SIZE = (!MAX_FILE_SIZE || MAX_FILE_SIZE <= 0 || isNaN(MAX_FILE_SIZE))
+  ? 524288000
+  : MAX_FILE_SIZE;
+
 const limits = {
-  fileSize: MAX_FILE_SIZE, // 500MB per file
+  fileSize: SAFE_MAX_FILE_SIZE, // 500MB per file
   files: 50, // max 50 files
   fields: 100, // max 100 non-file fields
   fieldSize: 10 * 1024 * 1024, // 10MB max field value size
@@ -44,7 +51,7 @@ const limits = {
   headerPairs: 2000 // max 2000 header pairs
 };
 
-logger.info(`Upload middleware configured with max file size: ${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}MB`);
+logger.info(`Upload middleware configured with max file size: ${Math.floor(SAFE_MAX_FILE_SIZE / 1024 / 1024)}MB (env: ${process.env.MAX_FILE_SIZE || 'not set'})`);
 
 export const uploadMiddleware = multer({
   storage,
