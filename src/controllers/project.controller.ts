@@ -25,10 +25,22 @@ export class ProjectController {
 
       logger.info('[getProjects] About to query database...');
 
-      // Simplified query to isolate issue
       const [projects, total] = await Promise.all([
         prisma.project.findMany({
           where: { userId },
+          include: {
+            videos: {
+              select: { id: true, originalName: true, size: true, duration: true }
+            },
+            groups: {
+              select: { id: true, name: true, order: true }
+            },
+            processingJobs: {
+              select: { id: true, status: true, progress: true, createdAt: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          },
           orderBy: { updatedAt: 'desc' },
           skip,
           take: limitNum
@@ -40,14 +52,14 @@ export class ProjectController {
 
       const pagination = createPagination(pageNum, limitNum, total);
 
-      // Parse settings for each project and add counts
-      const projectsWithParsedSettings = projects.map(project => ({
+      // Add counts to each project
+      const projectsWithCounts = projects.map(project => ({
         ...project,
-        videoCount: 0,
-        groupCount: 0
+        videoCount: project.videos.length,
+        groupCount: project.groups.length
       }));
 
-      ResponseHelper.success(res, projectsWithParsedSettings, 'Projects retrieved successfully', 200, pagination);
+      ResponseHelper.success(res, projectsWithCounts, 'Projects retrieved successfully', 200, pagination);
     } catch (error) {
       logger.error('Get projects error:', error);
       logger.error('Error details:', {

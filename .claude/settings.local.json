@@ -6,7 +6,13 @@
       "Bash(npm run build:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(curl -X POST \"https://cf.avolut.com/api/v1/deploy?uuid=osgk488wo0w0kgck84cwk40k&force=true\" -H \"Authorization: Bearer 5|CJbL8liBi6ra65UfLhGlru4YexDVur9U86E9ZxYGc478ab97\")",
+      "Bash(curl -X POST https://private.lumiku.com/api/v1/auth/login -H \"Content-Type: application/json\" -d \"{\"\"email\"\":\"\"admin@videomix.pro\"\",\"\"password\"\":\"\"Admin123!\"\"}\")",
+      "Bash(curl -X GET \"https://cf.avolut.com/api/v1/applications/osgk488wo0w0kgck84cwk40k/logs\" -H \"Authorization: Bearer 5|CJbL8liBi6ra65UfLhGlru4YexDVur9U86E9ZxYGc478ab97\")",
+      "Bash(curl -s https://private.lumiku.com/health)",
+      "Bash(python:*)",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/projects?page=1&limit=10\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk3MzI1OTEsImV4cCI6MTc1OTgxODk5MX0.AOIQv5ikT3kI1xznk5QBJOQP0VOGNXsdHYzzrCydmr4\")"
     ],
     "deny": [],
     "ask": []
