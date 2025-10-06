@@ -28,19 +28,6 @@ export class ProjectController {
       const [projects, total] = await Promise.all([
         prisma.project.findMany({
           where: { userId },
-          include: {
-            videos: {
-              select: { id: true, originalName: true, size: true, duration: true }
-            },
-            groups: {
-              select: { id: true, name: true, order: true }
-            },
-            processingJobs: {
-              select: { id: true, status: true, progress: true, createdAt: true },
-              orderBy: { createdAt: 'desc' },
-              take: 1
-            }
-          },
           orderBy: { updatedAt: 'desc' },
           skip,
           take: limitNum
@@ -50,14 +37,22 @@ export class ProjectController {
 
       logger.info('[getProjects] Query successful, projects:', projects.length, 'total:', total);
 
-      const pagination = createPagination(pageNum, limitNum, total);
+      // Get counts separately to avoid schema mismatch issues
+      const projectsWithCounts = await Promise.all(
+        projects.map(async (project) => {
+          const [videoCount, groupCount] = await Promise.all([
+            prisma.video.count({ where: { projectId: project.id } }),
+            prisma.videoGroup.count({ where: { projectId: project.id } })
+          ]);
+          return {
+            ...project,
+            videoCount,
+            groupCount
+          };
+        })
+      );
 
-      // Add counts to each project
-      const projectsWithCounts = projects.map(project => ({
-        ...project,
-        videoCount: project.videos.length,
-        groupCount: project.groups.length
-      }));
+      const pagination = createPagination(pageNum, limitNum, total);
 
       ResponseHelper.success(res, projectsWithCounts, 'Projects retrieved successfully', 200, pagination);
     } catch (error) {

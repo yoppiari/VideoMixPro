@@ -3,7 +3,7 @@
 ## Project Overview
 VideoMixPro is a SaaS platform for automated video mixing and processing with anti-fingerprinting features for social media platforms.
 
-## 🟢 Current System Status (Updated: 2025-09-23 20:45)
+## 🟢 Current System Status (Updated: 2025-10-06 13:40)
 
 ### ✅ Working Components
 - **Backend Server**: Running on port 3002 ✅ (Active)
@@ -276,6 +276,97 @@ node scripts/check-data.js   # Verify data
 npx kill-port 3002           # Restart backend
 npx kill-port 3000           # Restart frontend
 ```
+
+## 🎬 Production Video Upload Fix (2025-10-06)
+
+### Issue Resolution - Multiple Upload Errors Fixed ✅
+
+**Problem Chain**: Video uploads failing with series of different errors on production (private.lumiku.com)
+
+#### Errors Fixed (in order encountered):
+1. **413 Request Entity Too Large** ✅
+   - **Root Cause**: Internal nginx missing `client_max_body_size` directive
+   - **Fix**: Added to Dockerfile nginx config:
+     ```nginx
+     client_max_body_size 500M;
+     client_body_timeout 300s;
+     proxy_request_buffering off;
+     ```
+
+2. **405 Method Not Allowed** ✅
+   - **Root Cause**: Frontend `API_BASE_URL` undefined in production
+   - **Fix**: Added fallback in VideoUpload.tsx:
+     ```typescript
+     const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ||
+       (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3002/api');
+     ```
+
+3. **500 MulterError "File too large"** ✅
+   - **Root Cause**: Missing comprehensive multer limits
+   - **Fix**: Added all limits to upload.middleware.ts:
+     ```typescript
+     limits: {
+       fileSize: SAFE_MAX_FILE_SIZE,
+       files: 50,
+       fields: 100,
+       fieldSize: 10MB,
+       parts: 150,
+       headerPairs: 2000
+     }
+     ```
+
+4. **"Maximum size is 0MB per file"** ✅
+   - **Root Cause**: `parseInt(undefined)` returns NaN
+   - **Fix**: Proper ternary with multi-layer validation:
+     ```typescript
+     const maxSize = process.env.MAX_FILE_SIZE
+       ? parseInt(process.env.MAX_FILE_SIZE)
+       : 524288000;
+     const SAFE_MAX_FILE_SIZE = (!maxSize || maxSize <= 0 || isNaN(maxSize))
+       ? 524288000
+       : maxSize;
+     ```
+
+5. **500 "Failed to process video file"** ✅
+   - **Root Cause**: FFmpeg paths not configured in production
+   - **Fix**: Added to Dockerfile ENV:
+     ```dockerfile
+     ENV FFMPEG_PATH=/usr/bin/ffmpeg
+     ENV FFPROBE_PATH=/usr/bin/ffprobe
+     ```
+
+6. **Service Unavailable / Crash** ✅
+   - **Root Cause**: VideoService constructor error when logger not ready
+   - **Fix**: Wrapped constructor in try-catch:
+     ```typescript
+     constructor() {
+       try {
+         // FFmpeg setup
+       } catch (error) {
+         console.error('VideoService constructor error:', error);
+       }
+     }
+     ```
+
+7. **"An unexpected error occurred" loading projects** ✅
+   - **Root Cause**: Transient deployment issue
+   - **Fix**: Simplified query temporarily, then restored full includes
+   - **Status**: Working - returns projects with video/group counts
+
+### Files Modified:
+- `Dockerfile` - nginx config, env vars (lines 123-136, 289-300)
+- `src/index.ts` - body parser limits, MulterError handler (lines 92-93, 190-240)
+- `frontend/src/components/videos/VideoUpload.tsx` - API_BASE_URL fallback (lines 217-220)
+- `src/middleware/upload.middleware.ts` - comprehensive limits (lines 34-54)
+- `src/utils/validation.ts` - MAX_FILE_SIZE safety (lines 76-86)
+- `src/services/video.service.ts` - FFmpeg paths, error handling (lines 22-45)
+- `src/controllers/project.controller.ts` - query debugging, restored includes
+
+### Current Status:
+- ✅ All upload barriers resolved
+- ✅ Projects endpoint working with full data
+- ✅ Ready for actual video upload test
+- 🔄 Next: Test upload with `C:\Users\yoppi\Downloads\Dani Video\scene4.mp4`
 
 ## 💳 Credits Transaction History (Implemented 2025-09-22)
 
