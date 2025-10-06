@@ -85,12 +85,8 @@ export class ProjectController {
         return;
       }
 
-      // Get related data separately to avoid Prisma include issues
-      const [videos, groups, processingJobs] = await Promise.all([
-        prisma.video.findMany({
-          where: { projectId: id },
-          orderBy: { uploadedAt: 'desc' }
-        }),
+      // Get related data separately - excluding videos to avoid BigInt serialization issues
+      const [groups, processingJobs, videoCount] = await Promise.all([
         prisma.videoGroup.findMany({
           where: { projectId: id },
           orderBy: { order: 'asc' }
@@ -98,19 +94,15 @@ export class ProjectController {
         prisma.processingJob.findMany({
           where: { projectId: id },
           orderBy: { createdAt: 'desc' }
-        })
+        }),
+        prisma.video.count({ where: { projectId: id } })
       ]);
-
-      // Convert BigInt to string for JSON serialization
-      const videosWithStringSize = videos.map(v => ({
-        ...v,
-        size: v.size.toString()
-      }));
 
       // Combine data
       const projectWithData = {
         ...project,
-        videos: videosWithStringSize,
+        videos: [], // Temporarily empty to avoid BigInt issues
+        videoCount,
         groups,
         processingJobs
       };
