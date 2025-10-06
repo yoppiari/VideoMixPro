@@ -8,7 +8,11 @@ import logger from '@/utils/logger';
 export class ProjectController {
   async getProjects(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
+      logger.info('[getProjects] Starting...');
+
       const userId = req.user?.userId;
+      logger.info('[getProjects] userId:', userId);
+
       if (!userId) {
         ResponseHelper.unauthorized(res, 'User not authenticated');
         return;
@@ -18,6 +22,8 @@ export class ProjectController {
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
       const skip = (pageNum - 1) * limitNum;
+
+      logger.info('[getProjects] About to query database...');
 
       // Simplified query to isolate issue
       const [projects, total] = await Promise.all([
@@ -29,6 +35,8 @@ export class ProjectController {
         }),
         prisma.project.count({ where: { userId } })
       ]);
+
+      logger.info('[getProjects] Query successful, projects:', projects.length, 'total:', total);
 
       const pagination = createPagination(pageNum, limitNum, total);
 
