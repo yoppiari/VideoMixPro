@@ -296,6 +296,8 @@ ENV USE_IN_MEMORY_QUEUE=true
 ENV REDIS_URL="redis://localhost:6379"
 ENV MAX_FILE_SIZE=524288000
 ENV UPLOAD_PATH=/app/uploads
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
 
 # Create supervisor log directory and set permissions
 RUN mkdir -p /var/log/supervisor /var/run/supervisor && \

@@ -26,9 +26,16 @@ export class VideoService {
 
     if (ffmpegPath) {
       ffmpeg.setFfmpegPath(ffmpegPath);
+      logger.info(`FFmpeg path set to: ${ffmpegPath}`);
+    } else {
+      logger.warn('FFMPEG_PATH not set, using system default');
     }
+
     if (ffprobePath) {
       ffmpeg.setFfprobePath(ffprobePath);
+      logger.info(`FFprobe path set to: ${ffprobePath}`);
+    } else {
+      logger.warn('FFPROBE_PATH not set, using system default');
     }
   }
 
