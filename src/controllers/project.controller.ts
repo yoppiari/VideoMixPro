@@ -77,22 +77,7 @@ export class ProjectController {
       }
 
       const project = await prisma.project.findFirst({
-        where: { id, userId },
-        include: {
-          videos: {
-            include: {
-              group: {
-                select: { id: true, name: true }
-              }
-            }
-          },
-          groups: {
-            orderBy: { order: 'asc' }
-          },
-          processingJobs: {
-            orderBy: { createdAt: 'desc' }
-          }
-        }
+        where: { id, userId }
       });
 
       if (!project) {
@@ -100,8 +85,31 @@ export class ProjectController {
         return;
       }
 
-      // Send response (settings field doesn't exist in schema)
-      ResponseHelper.success(res, project);
+      // Get related data separately to avoid Prisma include issues
+      const [videos, groups, processingJobs] = await Promise.all([
+        prisma.video.findMany({
+          where: { projectId: id },
+          orderBy: { uploadedAt: 'desc' }
+        }),
+        prisma.videoGroup.findMany({
+          where: { projectId: id },
+          orderBy: { order: 'asc' }
+        }),
+        prisma.processingJob.findMany({
+          where: { projectId: id },
+          orderBy: { createdAt: 'desc' }
+        })
+      ]);
+
+      // Combine data
+      const projectWithData = {
+        ...project,
+        videos,
+        groups,
+        processingJobs
+      };
+
+      ResponseHelper.success(res, projectWithData);
     } catch (error) {
       logger.error('Get project error:', error);
       ResponseHelper.serverError(res, 'Failed to get project');
