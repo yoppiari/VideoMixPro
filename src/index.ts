@@ -187,17 +187,55 @@ app.use('*', (req, res) => {
   ResponseHelper.notFound(res, 'Endpoint not found');
 });
 
-app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', error);
   logger.error('Error stack:', error.stack);
-  // EXPOSE ACTUAL ERROR FOR DEBUGGING
+
+  // Handle Multer errors specifically
+  if (error.name === 'MulterError') {
+    let message = 'File upload error';
+    let statusCode = 400;
+
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        message = `File too large. Maximum size is ${Math.floor(parseInt(process.env.MAX_FILE_SIZE || '524288000') / 1024 / 1024)}MB per file`;
+        break;
+      case 'LIMIT_FILE_COUNT':
+        message = 'Too many files. Maximum is 50 files';
+        break;
+      case 'LIMIT_UNEXPECTED_FILE':
+        message = 'Unexpected file field';
+        break;
+      case 'LIMIT_FIELD_KEY':
+        message = 'Field name too long';
+        break;
+      case 'LIMIT_FIELD_VALUE':
+        message = 'Field value too long';
+        break;
+      case 'LIMIT_FIELD_COUNT':
+        message = 'Too many fields';
+        break;
+      case 'LIMIT_PART_COUNT':
+        message = 'Too many parts in multipart form';
+        break;
+      default:
+        message = error.message || 'File upload error';
+    }
+
+    return res.status(statusCode).json({
+      success: false,
+      error: message,
+      code: error.code
+    });
+  }
+
+  // Generic error handler
   res.status(500).json({
     success: false,
     error: error.message || 'Unknown error',
     name: error.name || 'Error',
-    stack: error.stack || 'No stack trace',
-    type: typeof error,
-    details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    details: process.env.NODE_ENV === 'development' ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : undefined
   });
 });
 

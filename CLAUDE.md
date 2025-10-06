@@ -455,6 +455,31 @@ Redesigned credit calculation to encourage large batch processing while protecti
 **Files Modified**:
 - `frontend/src/components/videos/VideoUpload.tsx` - Added API_BASE_URL fallback
 
+### Follow-up Fix: Multer File Size Limits (500 Internal Server Error)
+**Problem**: After fixing URL, uploads still failed with "MulterError: File too large"
+
+**Root Cause**: Multer middleware missing comprehensive limits configuration
+
+**Solution**:
+1. **Enhanced Multer Limits** (upload.middleware.ts:32-39):
+   - Added `fields: 100` - max non-file fields
+   - Added `fieldSize: 10MB` - max field value size
+   - Added `parts: 150` - max parts (files + fields)
+   - Added `headerPairs: 2000` - max header pairs
+
+2. **Better Error Handling** (index.ts:190-240):
+   - Added specific MulterError handler
+   - User-friendly error messages for each Multer error code
+   - Better logging for debugging
+
+3. **Improved Logging** (upload.middleware.ts:20-32):
+   - Log file details during upload
+   - Log acceptance/rejection decisions
+
+**Files Modified**:
+- `src/middleware/upload.middleware.ts` - Enhanced limits and logging
+- `src/index.ts` - Added MulterError-specific error handler
+
 ---
 
 ## 🔧 Production Login Fix (2025-10-05)

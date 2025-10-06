@@ -18,20 +18,26 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  logger.info(`Processing file upload: ${file.originalname}, mimetype: ${file.mimetype}`);
+  logger.info(`Processing file upload: ${file.originalname}, mimetype: ${file.mimetype}, size: ${file.size || 'unknown'}`);
 
   if (!validateFileType(file.mimetype)) {
     const error = new Error('Invalid file type. Only video files are allowed.');
     (error as any).code = 'INVALID_FILE_TYPE';
+    logger.error(`File type rejected: ${file.mimetype}`);
     return cb(error as any);
   }
 
+  logger.info(`File accepted: ${file.originalname}`);
   cb(null, true);
 };
 
 const limits = {
-  fileSize: parseInt(process.env.MAX_FILE_SIZE || '524288000'), // 500MB default
-  files: 50
+  fileSize: parseInt(process.env.MAX_FILE_SIZE || '524288000'), // 500MB per file
+  files: 50, // max 50 files
+  fields: 100, // max 100 non-file fields
+  fieldSize: 10 * 1024 * 1024, // 10MB max field value size
+  parts: 150, // max 150 parts (files + fields)
+  headerPairs: 2000 // max 2000 header pairs
 };
 
 export const uploadMiddleware = multer({
