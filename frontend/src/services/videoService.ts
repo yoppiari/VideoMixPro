@@ -4,12 +4,30 @@ import { API_ENDPOINTS } from '../utils/constants';
 export interface Video {
   id: string;
   filename: string;
-  originalname: string;
-  mimetype: string;
-  size: number;
-  status: 'uploaded' | 'processing' | 'completed' | 'failed';
-  createdAt: string;
-  updatedAt: string;
+  originalName: string;  // Changed from originalname
+  mimeType: string;      // Changed from mimetype
+  size: number | string; // Can be string due to BigInt serialization
+  duration?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  bitrate?: number;
+  codec?: string;
+  hasAudio?: boolean;
+  thumbnailUrl?: string | null;
+  projectId: string;
+  groupId?: string | null;
+  uploadedAt: string;    // Changed from createdAt
+  status?: 'READY' | 'PROCESSING' | 'FAILED'; // Optional field from API
+  group?: {
+    id: string;
+    name: string;
+    order: number;
+  } | null;
+  metadata?: {
+    static: Record<string, any>;
+    dynamic?: Record<string, any>;
+  };
 }
 
 export interface VideoUploadResponse {
