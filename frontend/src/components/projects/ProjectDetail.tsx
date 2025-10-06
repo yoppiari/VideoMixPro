@@ -682,7 +682,7 @@ const ProjectDetail: React.FC = () => {
                           {video.originalName}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Uploaded {formatDate(video.createdAt)}
+                          Uploaded {formatDate(video.uploadedAt)}
                         </p>
                       </div>
                       <div className="flex-shrink-0">
@@ -903,8 +903,8 @@ const ProjectDetail: React.FC = () => {
                       </h4>
                       <div className="mt-2 text-xs text-gray-500 space-y-1">
                         <div>{formatFileSize(video.size)}</div>
-                        <div>{video.format.toUpperCase()}</div>
-                        <div>{formatDate(video.createdAt)}</div>
+                        <div>{video.mimeType || 'Unknown format'}</div>
+                        <div>{formatDate(video.uploadedAt)}</div>
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
