@@ -210,7 +210,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
       }
 
       // Fetch download info for batch options
-      if (job.status === 'COMPLETED' && job.outputFiles.length > 0) {
+      if (job.status === 'COMPLETED' && job.outputFiles?.length > 0) {
         const infoResponse = await fetch(`/api/v1/processing/job/${job.id}/download-info`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -480,7 +480,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                   )}
 
                   <div className="flex items-center space-x-2">
-                    {job.status === 'COMPLETED' && job.outputFiles.length > 0 && (
+                    {job.status === 'COMPLETED' && job.outputFiles?.length > 0 && (
                       <button
                         onClick={() => {
                           setSelectedJob(job);
@@ -488,7 +488,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                         }}
                         className="text-green-600 hover:text-green-500 text-sm font-medium"
                       >
-                        View Results ({job.outputFiles.length})
+                        View Results ({job.outputFiles?.length || 0})
                       </button>
                     )}
 
@@ -806,15 +806,15 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                   </div>
                 )}
 
-                {selectedJob.outputFiles.length > 0 && (
+                {selectedJob.outputFiles?.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-sm font-medium text-gray-700">
-                        Output Files ({selectedJob.outputFiles.length} total)
+                        Output Files ({selectedJob.outputFiles?.length || 0} total)
                       </label>
 
                       {/* Batch Download Options */}
-                      {selectedJob.outputFiles.length > 1 && (
+                      {(selectedJob.outputFiles?.length || 0) > 1 && (
                         <div className="flex items-center space-x-2">
                           {downloadInfo && (
                             <span className="text-xs text-gray-500">
@@ -822,7 +822,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                             </span>
                           )}
 
-                          {selectedJob.outputFiles.length <= 100 && (
+                          {(selectedJob.outputFiles?.length || 0) <= 100 && (
                             <button
                               onClick={() => handleBatchDownload('all')}
                               className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
@@ -864,11 +864,11 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                     )}
 
                     {/* Pagination Controls */}
-                    {selectedJob.outputFiles.length > filesPerPage && (
+                    {(selectedJob.outputFiles?.length || 0) > filesPerPage && (
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-sm text-gray-600">
                           Showing {(currentPage - 1) * filesPerPage + 1} to{' '}
-                          {Math.min(currentPage * filesPerPage, selectedJob.outputFiles.length)}
+                          {Math.min(currentPage * filesPerPage, selectedJob.outputFiles?.length || 0)}
                         </div>
                         <div className="flex space-x-2">
                           <button
@@ -879,11 +879,11 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                             Previous
                           </button>
                           <span className="px-2 py-1 text-sm">
-                            Page {currentPage} of {Math.ceil(selectedJob.outputFiles.length / filesPerPage)}
+                            Page {currentPage} of {Math.ceil((selectedJob.outputFiles?.length || 0) / filesPerPage)}
                           </span>
                           <button
-                            onClick={() => setCurrentPage(p => Math.min(Math.ceil(selectedJob.outputFiles.length / filesPerPage), p + 1))}
-                            disabled={currentPage >= Math.ceil(selectedJob.outputFiles.length / filesPerPage)}
+                            onClick={() => setCurrentPage(p => Math.min(Math.ceil((selectedJob.outputFiles?.length || 0) / filesPerPage), p + 1))}
+                            disabled={currentPage >= Math.ceil((selectedJob.outputFiles?.length || 0) / filesPerPage)}
                             className="px-2 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
                           >
                             Next
@@ -893,13 +893,13 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                     )}
 
                     {/* Select All for Current Page */}
-                    {selectedJob.outputFiles.length > 1 && (
+                    {(selectedJob.outputFiles?.length || 0) > 1 && (
                       <div className="mb-2">
                         <label className="flex items-center space-x-2 text-sm">
                           <input
                             type="checkbox"
                             onChange={(e) => {
-                              const pageFiles = selectedJob.outputFiles
+                              const pageFiles = (selectedJob.outputFiles || [])
                                 .slice((currentPage - 1) * filesPerPage, currentPage * filesPerPage)
                                 .map(f => f.id);
                               if (e.target.checked) {
@@ -918,12 +918,12 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
                     )}
 
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {selectedJob.outputFiles
+                      {(selectedJob.outputFiles || [])
                         .slice((currentPage - 1) * filesPerPage, currentPage * filesPerPage)
                         .map((file) => (
                         <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                           <div className="flex items-center space-x-3">
-                            {selectedJob.outputFiles.length > 1 && (
+                            {(selectedJob.outputFiles?.length || 0) > 1 && (
                               <input
                                 type="checkbox"
                                 checked={selectedFiles.has(file.id)}

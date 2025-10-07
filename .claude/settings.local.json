@@ -54,7 +54,9 @@
       "Bash(})",
       "Bash(echo:*)",
       "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/videos/project/cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4NDAxNjYsImV4cCI6MTc1OTkyNjU2Nn0.5tkWll4wMyfURSAn7d8S8F3KH3-mNrO98SCnuv5m7wk\")",
-      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r&page=1&limit=1\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4NDAxNjYsImV4cCI6MTc1OTkyNjU2Nn0.5tkWll4wMyfURSAn7d8S8F3KH3-mNrO98SCnuv5m7wk\")"
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r&page=1&limit=1\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4NDAxNjYsImV4cCI6MTc1OTkyNjU2Nn0.5tkWll4wMyfURSAn7d8S8F3KH3-mNrO98SCnuv5m7wk\")",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmggmtbse0003q86gjziu9lyf&page=1&limit=1\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4NDYzNTUsImV4cCI6MTc1OTkzMjc1NX0.MASXRXgt_aoIDvuPAl7dAiFgnJx5C7_doL80Q2RMhW4\")",
+      "Bash(npm run build:frontend:*)"
     ],
     "deny": [],
     "ask": []
