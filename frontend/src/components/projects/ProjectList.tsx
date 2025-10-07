@@ -53,13 +53,8 @@ const ProjectList: React.FC = () => {
         const projectsData = response.data || [];
         console.log('Setting projects:', projectsData);
 
-        // Add videoCount for each project
-        const projectsWithVideoCount = projectsData.map((project: any) => ({
-          ...project,
-          videoCount: project.videoFiles ? project.videoFiles.length : 0
-        }));
-
-        setProjects(projectsWithVideoCount);
+        // Projects already have videoCount and groupCount from API
+        setProjects(projectsData);
 
         // Update pagination info
         const paginationData = response.pagination || {};
