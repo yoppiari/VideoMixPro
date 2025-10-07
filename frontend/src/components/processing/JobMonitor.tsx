@@ -52,7 +52,6 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
 }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isPageVisible, setIsPageVisible] = useState(true);
   const [activeInterval, setActiveInterval] = useState<NodeJS.Timeout | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -75,7 +74,6 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
     setAbortController(newController);
 
     try {
-      setError(null);
       let response;
       let jobs: Job[] = [];
 
@@ -121,22 +119,8 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
         return;
       }
 
-      // Only show error for critical failures, log others
-      console.error('Error fetching jobs:', error);
-
-      // Check if it's a network error or server error
-      const isNetworkError = !error?.response || error?.code === 'ECONNREFUSED';
-      const isServerError = error?.response?.status >= 500;
-
-      // Only set error state for critical issues
-      if (isNetworkError || isServerError) {
-        setError('Failed to fetch jobs');
-
-        // Auto-dismiss error after 5 seconds
-        setTimeout(() => {
-          setError(null);
-        }, 5000);
-      }
+      // Silently log errors without showing to user
+      console.debug('Error fetching jobs (silently ignored):', error);
     } finally {
       setLoading(false);
       // Clear the abort controller once request is complete
@@ -199,7 +183,6 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
       fetchJobs();
     } catch (error) {
       console.error('Error cancelling job:', error);
-      setError('Failed to cancel job');
     }
   };
 
@@ -331,7 +314,7 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error downloading output:', error);
-      setError('Failed to download file');
+      alert('Failed to download file');
     }
   };
 
@@ -430,11 +413,6 @@ const JobMonitor: React.FC<JobMonitorProps> = ({
         </div>
       </div>
 
-      {error && (
-        <div className="px-6 py-4 bg-red-50 border-b border-red-200">
-          <div className="text-red-700">{error}</div>
-        </div>
-      )}
 
       <div className="divide-y divide-gray-200">
         {jobs.length === 0 ? (
