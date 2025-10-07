@@ -8,20 +8,22 @@ export const generalRateLimit = process.env.NODE_ENV === 'development'
   ? (req: Request, res: Response, next: NextFunction) => next() // Skip in development
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
+      max: 500, // Increased from 100 to 500 for better UX in production
       message: {
         error: 'Too many requests from this IP, please try again later.',
         retryAfter: 900 // 15 minutes in seconds
       },
       standardHeaders: true,
-      legacyHeaders: false
+      legacyHeaders: false,
+      skipSuccessfulRequests: true, // Don't count successful requests against limit
+      skip: (req: Request) => req.method === 'OPTIONS' // Skip CORS preflight
     });
 
 export const authRateLimit = process.env.NODE_ENV === 'development'
   ? (req: Request, res: Response, next: NextFunction) => next() // Skip in development
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 50, // Balanced limit: enough for testing, not too permissive
+      max: 200, // Increased from 50 to 200 for better testing/development experience
       message: {
         error: 'Too many authentication attempts from this IP, please try again later.',
         retryAfter: 900
@@ -36,13 +38,15 @@ export const authRateLimit = process.env.NODE_ENV === 'development'
 
 export const uploadRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // limit each IP to 10 uploads per hour
+  max: 50, // Increased from 10 to 50 uploads per hour for better workflow
   message: {
     error: 'Too many upload requests from this IP, please try again later.',
     retryAfter: 3600
   },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful uploads
+  skip: (req: Request) => req.method === 'OPTIONS' // Skip CORS preflight
 });
 
 // Helmet configuration for security headers
