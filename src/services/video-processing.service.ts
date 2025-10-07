@@ -140,6 +140,8 @@ export class VideoProcessingService {
 
   async queueProcessingJob(jobId: string, data: ProcessingJobData): Promise<void> {
     try {
+      logger.info(`[QUEUE] Starting queue for job ${jobId}`);
+
       // Check if job is already cancelled or completed
       const job = await prisma.processingJob.findUnique({
         where: { id: jobId },
@@ -150,6 +152,8 @@ export class VideoProcessingService {
         logger.error(`Job ${jobId} not found in database`);
         return;
       }
+
+      logger.info(`[QUEUE] Job ${jobId} found with status: ${job.status}`);
 
       // Don't process cancelled, completed, or failed jobs
       if (job.status === JobStatus.CANCELLED) {
@@ -170,14 +174,18 @@ export class VideoProcessingService {
       // Mark job as active
       this.activeJobs.set(jobId, true);
 
+      logger.info(`[QUEUE] Scheduling processVideo for job ${jobId} via setImmediate`);
+
       // In production, this would use Bull Queue or similar
       // For now, we'll process immediately in background
       setImmediate(async () => {
         try {
+          logger.info(`[SETIMMEDIATE] Starting processVideo for job ${jobId}`);
           await this.processVideo(jobId, data);
+          logger.info(`[SETIMMEDIATE] Completed processVideo for job ${jobId}`);
         } catch (error) {
           // Catch any unhandled errors from processVideo
-          logger.error(`Unhandled error in processVideo for job ${jobId}:`, error);
+          logger.error(`[SETIMMEDIATE] Unhandled error in processVideo for job ${jobId}:`, error);
           console.error('CRITICAL: Unhandled error in setImmediate:', error);
 
           // Try to update job status with the actual error
@@ -540,12 +548,15 @@ export class VideoProcessingService {
   }
 
   private async processVideo(jobId: string, data: ProcessingJobData): Promise<void> {
+    logger.info(`[PROCESS] processVideo started for job ${jobId}, projectId: ${data.projectId}`);
     this.activeJobs.set(jobId, true);
     let project: any = undefined; // Declare project outside try block
 
     try {
+      logger.info(`[PROCESS] Updating job status to PROCESSING for job ${jobId}`);
       await this.updateJobStatusWithDetails(jobId, JobStatus.PROCESSING, 0, 'Initializing video processing');
 
+      logger.info(`[PROCESS] Fetching project ${data.projectId} from database`);
       project = await prisma.project.findUnique({
         where: { id: data.projectId },
         include: {
@@ -563,6 +574,8 @@ export class VideoProcessingService {
           // voiceOverFiles disabled - feature incomplete
         }
       });
+
+      logger.info(`[PROCESS] Project fetched. Project exists: ${!!project}`);
 
       if (!project) {
         throw new Error('Project not found');
@@ -814,10 +827,22 @@ export class VideoProcessingService {
             userMessage = `Video processing failed: ${errorMessage.substring(0, 200)}`;
           }
         } else {
-          // Non-FFmpeg error
-          const analysisResult = this.errorHandlingService.analyzeError(error as Error, context);
-          userMessage = this.errorHandlingService.getUserMessage(analysisResult.id);
+          // Non-FFmpeg error - SHOW ACTUAL ERROR MESSAGE
+          logger.error(`[PROCESS] Non-FFmpeg error for job ${jobId}: ${errorMessage}`);
+
+          // Use actual error message instead of generic one
+          userMessage = `Error: ${errorMessage}`;
+
+          // Add stack trace first line for debugging
+          if (error instanceof Error && error.stack) {
+            const firstStackLine = error.stack.split('\n')[1]?.trim() || '';
+            if (firstStackLine) {
+              userMessage += ` | At: ${firstStackLine}`;
+            }
+          }
         }
+
+        logger.info(`[PROCESS] Updating job ${jobId} with error: ${userMessage}`);
 
         await this.updateJobStatusWithDetails(
           jobId,
