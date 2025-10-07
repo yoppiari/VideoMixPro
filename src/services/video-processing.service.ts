@@ -553,7 +553,7 @@ export class VideoProcessingService {
       const isVoiceOverMode = (settings as any).voiceOverMode === true || (settings as any).audioMode === 'voiceover';
 
       // Start monitoring this job
-      const expectedVideoCount = project.videoFiles.length;
+      const expectedVideoCount = project.videos.length;
       processingMonitor.startMonitoring(jobId, expectedVideoCount, settings);
       processingMonitor.logStage(jobId, 'PROJECT_LOADED', {
         videoCount: expectedVideoCount,
@@ -655,9 +655,9 @@ export class VideoProcessingService {
 
         // Determine mixing mode based on settings
         // Use group-based mixing only if explicitly enabled AND groups have videos
-        const hasGroupsWithVideos = project.videoGroups &&
-                                   project.videoGroups.length > 0 &&
-                                   project.videoGroups.some((g: any) => g.videoFiles && g.videoFiles.length > 0);
+        const hasGroupsWithVideos = project.groups &&
+                                   project.groups.length > 0 &&
+                                   project.groups.some((g: any) => g.videos && g.videos.length > 0);
 
         const useGroupMixing = settings.groupMixing === true && hasGroupsWithVideos;
         const mixingMode = useGroupMixing ? 'manual' : 'auto';
@@ -798,7 +798,7 @@ export class VideoProcessingService {
   }
 
   private async preGenerateVariants(project: any, settings: any, outputCount: number): Promise<any[]> {
-    const videoFiles = project.videoFiles;
+    const videoFiles = project.videos;
 
     // Convert video files to VideoClip format for auto-mixing service
     const clips: VideoClip[] = videoFiles.map((file: any) => ({
@@ -874,7 +874,7 @@ export class VideoProcessingService {
   }
 
   private async processAutoMixing(project: any, settings: any, index: number, preGeneratedVariants?: any[]): Promise<string> {
-    const videoFiles = project.videoFiles;
+    const videoFiles = project.videos;
 
     // Enhanced logging for debugging
     logger.info(`[Auto-Mixing] Starting auto-mixing for output ${index + 1}`);
@@ -989,8 +989,8 @@ export class VideoProcessingService {
 
     // Prepare groups if group mixing is enabled
     let groups = undefined;
-    if (settings.groupMixing && project.videoGroups && project.videoGroups.length > 0) {
-      groups = project.videoGroups.map((group: any) => ({
+    if (settings.groupMixing && project.groups && project.groups.length > 0) {
+      groups = project.groups.map((group: any) => ({
         id: group.id,
         name: group.name,
         order: group.order,
@@ -1177,7 +1177,7 @@ export class VideoProcessingService {
   }
 
   private async processManualMixing(project: any, settings: VideoMixingOptions, index: number): Promise<string> {
-    const groups = project.videoGroups;
+    const groups = project.groups;
 
     if (groups.length === 0) {
       throw new Error('No video groups configured for manual mixing');
