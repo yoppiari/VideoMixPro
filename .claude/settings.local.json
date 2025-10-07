@@ -49,7 +49,11 @@
       "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/videos/project/cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4MjE2NzcsImV4cCI6MTc1OTkwODA3N30.FAK66KWWQOrVEZ1jrzGjzMwp6ucKHiplM8o6v4pDeOk\")",
       "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4MjI3ODcsImV4cCI6MTc1OTkwOTE4N30.ga5R6z3ljQKMGb8rpBNiWcUGtFwZiSOR6Nlt5-G36i0\")",
       "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r&page=1&limit=1\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4MjI3ODcsImV4cCI6MTc1OTkwOTE4N30.ga5R6z3ljQKMGb8rpBNiWcUGtFwZiSOR6Nlt5-G36i0\")",
-      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4MjUzODcsImV4cCI6MTc1OTkxMTc4N30.SRnguyh-8qn7Val1nZie9hEzh1ezQfQ7tTvo3jCQVJA\")"
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/processing/jobs?projectId=cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4MjUzODcsImV4cCI6MTc1OTkxMTc4N30.SRnguyh-8qn7Val1nZie9hEzh1ezQfQ7tTvo3jCQVJA\")",
+      "Bash({ echo \"Server restarted!\")",
+      "Bash(})",
+      "Bash(echo:*)",
+      "Bash(curl -s -X GET \"https://private.lumiku.com/api/v1/videos/project/cmgdwfhk30001qe6g2dit153r\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZ3eHp5dTUwMDAwc2JkMm10Nnd6OG8wIiwiZW1haWwiOiJhZG1pbkB2aWRlb21peC5wcm8iLCJsaWNlbnNlVHlwZSI6IkVOVEVSUFJJU0UiLCJpYXQiOjE3NTk4NDAxNjYsImV4cCI6MTc1OTkyNjU2Nn0.5tkWll4wMyfURSAn7d8S8F3KH3-mNrO98SCnuv5m7wk\")"
     ],
     "deny": [],
     "ask": []

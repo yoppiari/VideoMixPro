@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-07-08-42-debug-logging
+ARG CACHE_BUST=2025-10-07-09-12-error-capture
 
 WORKDIR /app
 

@@ -172,7 +172,29 @@ export class VideoProcessingService {
 
       // In production, this would use Bull Queue or similar
       // For now, we'll process immediately in background
-      setImmediate(() => this.processVideo(jobId, data));
+      setImmediate(async () => {
+        try {
+          await this.processVideo(jobId, data);
+        } catch (error) {
+          // Catch any unhandled errors from processVideo
+          logger.error(`Unhandled error in processVideo for job ${jobId}:`, error);
+          console.error('CRITICAL: Unhandled error in setImmediate:', error);
+
+          // Try to update job status with the actual error
+          try {
+            await prisma.processingJob.update({
+              where: { id: jobId },
+              data: {
+                status: JobStatus.FAILED,
+                errorMessage: error instanceof Error ? error.message : 'Unknown error in setImmediate',
+                completedAt: new Date()
+              }
+            });
+          } catch (updateError) {
+            logger.error(`Failed to update job ${jobId} after unhandled error:`, updateError);
+          }
+        }
+      });
     } catch (error) {
       logger.error(`Failed to queue job ${jobId}:`, error);
     }
@@ -554,6 +576,14 @@ export class VideoProcessingService {
       console.log('Videos:', JSON.stringify(project.videos || [], null, 2));
       console.log('Groups count:', project.groups?.length || 0);
       console.log('=== END PROJECT DATA ===');
+
+      // Store debug info in job for troubleshooting
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: {
+          errorMessage: `[DEBUG] Starting - ${project.videos?.length || 0} videos, ${project.groups?.length || 0} groups`
+        }
+      });
 
       const settings = data.settings;
       const outputs: string[] = [];
