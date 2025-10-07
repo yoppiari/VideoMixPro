@@ -1,3 +1,10 @@
+// CRITICAL FIX: Global BigInt serialization handler
+// Must be at the very top before any other code
+// PostgreSQL returns BigInt for numeric fields, but JSON.stringify can't handle it
+(BigInt.prototype as any).toJSON = function() {
+  return Number(this);
+};
+
 import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
