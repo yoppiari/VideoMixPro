@@ -737,7 +737,7 @@ export class VideoProcessingService {
       // Try to schedule retry before marking as failed
       const context = {
         operation: 'video_processing',
-        inputFiles: project?.videoFiles?.map((f: any) => f.path) || [],
+        inputFiles: project?.videos?.map((f: any) => f.path) || [],
         outputFile: undefined,
         command: `Processing job ${jobId}`
       };
@@ -803,7 +803,7 @@ export class VideoProcessingService {
     // Convert video files to VideoClip format for auto-mixing service
     const clips: VideoClip[] = videoFiles.map((file: any) => ({
       id: file.id,
-      path: file.path,
+      path: file.path || `uploads/${file.filename}`, // Construct path from filename if not present
       duration: file.duration || 30,
       metadata: {
         resolution: file.resolution,
@@ -895,7 +895,7 @@ export class VideoProcessingService {
     // Convert video files to VideoClip format for auto-mixing service
     const clips: VideoClip[] = videoFiles.map((file: any) => ({
       id: file.id,
-      path: file.path,
+      path: file.path || `uploads/${file.filename}`, // Construct path from filename if not present
       duration: file.duration || 30,
       metadata: {
         resolution: file.resolution,
