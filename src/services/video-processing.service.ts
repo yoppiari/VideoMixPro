@@ -546,6 +546,15 @@ export class VideoProcessingService {
         throw new Error('Project not found');
       }
 
+      // Debug logging: check what data we got from database
+      console.log('=== PROJECT DATA DEBUG ===');
+      console.log('Project ID:', project.id);
+      console.log('Project Name:', project.name);
+      console.log('Videos count:', project.videos?.length || 0);
+      console.log('Videos:', JSON.stringify(project.videos || [], null, 2));
+      console.log('Groups count:', project.groups?.length || 0);
+      console.log('=== END PROJECT DATA ===');
+
       const settings = data.settings;
       const outputs: string[] = [];
 
@@ -719,7 +728,7 @@ export class VideoProcessingService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
       // Enhanced error logging with more context
-      logger.error(`Job ${jobId} failed with detailed context:`, {
+      const errorDetails = {
         jobId,
         projectId: data.projectId,
         errorMessage,
@@ -732,7 +741,12 @@ export class VideoProcessingService {
         timestamp: new Date().toISOString(),
         processMemory: process.memoryUsage(),
         nodeVersion: process.version
-      });
+      };
+
+      logger.error(`Job ${jobId} failed with detailed context:`, errorDetails);
+      console.error('=== PROCESSING ERROR DETAILS ===');
+      console.error(JSON.stringify(errorDetails, null, 2));
+      console.error('=== END PROCESSING ERROR ===');
 
       // Try to schedule retry before marking as failed
       const context = {
