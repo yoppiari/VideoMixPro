@@ -26,7 +26,7 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 
 # Cache busting argument - change this to force rebuild
-ARG CACHE_BUST=2025-10-07-10-35-frontend-fix
+ARG CACHE_BUST=2025-10-07-23-00-output-path-fix
 
 WORKDIR /app
 
@@ -296,6 +296,7 @@ ENV USE_IN_MEMORY_QUEUE=true
 ENV REDIS_URL="redis://localhost:6379"
 ENV MAX_FILE_SIZE=524288000
 ENV UPLOAD_PATH=/app/uploads
+ENV OUTPUT_PATH=/app/outputs
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV FFPROBE_PATH=/usr/bin/ffprobe
 

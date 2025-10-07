@@ -600,7 +600,7 @@ export class ProcessingController {
       }
 
       // Construct path from filename - path field doesn't exist in ProcessedVideo schema
-      const outputPath = path.join(process.env.OUTPUT_DIR || 'outputs', output.filename);
+      const outputPath = path.join(process.env.OUTPUT_PATH || process.env.OUTPUT_DIR || 'outputs', output.filename);
 
       if (!fs.existsSync(outputPath)) {
         ResponseHelper.notFound(res, 'File not found on disk');
@@ -680,7 +680,7 @@ export class ProcessingController {
       // Add files to archive
       for (const file of filesToZip) {
         // Construct path from filename - path field doesn't exist in ProcessedVideo schema
-        const filePath = path.join(process.env.OUTPUT_DIR || 'outputs', file.filename);
+        const filePath = path.join(process.env.OUTPUT_PATH || process.env.OUTPUT_DIR || 'outputs', file.filename);
         if (fs.existsSync(filePath)) {
           archive.file(filePath, { name: file.filename });
         }
@@ -746,7 +746,7 @@ export class ProcessingController {
       // Add files to archive
       for (const file of job.outputs) {
         // Construct path from filename - path field doesn't exist in ProcessedVideo schema
-        const filePath = path.join(process.env.OUTPUT_DIR || 'outputs', file.filename);
+        const filePath = path.join(process.env.OUTPUT_PATH || process.env.OUTPUT_DIR || 'outputs', file.filename);
         if (fs.existsSync(filePath)) {
           archive.file(filePath, { name: file.filename });
         }

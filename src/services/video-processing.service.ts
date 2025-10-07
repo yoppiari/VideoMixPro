@@ -120,7 +120,7 @@ export class VideoProcessingService {
   private activeJobs = new Map<string, boolean>();
   private ffmpegProcesses = new Map<string, any>(); // Store FFmpeg child processes for cancellation
   private readonly tempDir = process.env.TEMP_DIR || 'temp';
-  private readonly outputDir = process.env.OUTPUT_DIR || 'outputs';
+  private readonly outputDir = process.env.OUTPUT_PATH || process.env.OUTPUT_DIR || 'outputs';
   private readonly thumbnailDir = process.env.THUMBNAIL_DIR || 'thumbnails';
   private autoMixingService = new AutoMixingService();
   private errorHandlingService = new ErrorHandlingService();
