@@ -154,10 +154,18 @@ export interface ApiResponse<T = any> {
 }
 
 export interface PaginationInfo {
+  // Old format (backward compatibility)
   page: number;
   limit: number;
   total: number;
   pages: number;
+  // New format (frontend expects these)
+  currentPage?: number;
+  totalPages?: number;
+  totalItems?: number;
+  itemsPerPage?: number;
+  hasNextPage?: boolean;
+  hasPrevPage?: boolean;
 }
 
 export interface AuthTokenPayload {

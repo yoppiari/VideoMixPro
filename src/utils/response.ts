@@ -83,9 +83,20 @@ export const createPagination = (
   page: number,
   limit: number,
   total: number
-): PaginationInfo => ({
-  page,
-  limit,
-  total,
-  pages: Math.ceil(total / limit)
-});
+): PaginationInfo => {
+  const totalPages = Math.ceil(total / limit);
+  return {
+    // Old format (keep for backward compatibility)
+    page,
+    limit,
+    total,
+    pages: totalPages,
+    // New format (what frontend expects)
+    currentPage: page,
+    totalPages,
+    totalItems: total,
+    itemsPerPage: limit,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1
+  };
+};
