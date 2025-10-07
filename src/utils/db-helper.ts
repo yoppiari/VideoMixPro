@@ -61,15 +61,58 @@ export class DbHelper {
    */
   static serializeJson(data: any): string | object {
     if (!data) return null;
-    
+
+    // Convert data to be JSON-safe (handle BigInt, undefined, etc.)
+    const safeData = this.makeJsonSafe(data);
+
     // For SQLite, always stringify
     if (!this.isPostgreSQL()) {
-      return typeof data === 'string' ? data : JSON.stringify(data);
+      return typeof safeData === 'string' ? safeData : JSON.stringify(safeData);
     }
-    
+
     // For PostgreSQL, we also stringify for consistency
     // This ensures the schema works for both databases
-    return typeof data === 'string' ? data : JSON.stringify(data);
+    return typeof safeData === 'string' ? safeData : JSON.stringify(safeData);
+  }
+
+  /**
+   * Make data safe for JSON serialization
+   * Converts BigInt to Number, removes undefined, etc.
+   */
+  private static makeJsonSafe(data: any): any {
+    if (data === null || data === undefined) {
+      return null;
+    }
+
+    // Handle BigInt
+    if (typeof data === 'bigint') {
+      return Number(data);
+    }
+
+    // Handle Date
+    if (data instanceof Date) {
+      return data.toISOString();
+    }
+
+    // Handle Array
+    if (Array.isArray(data)) {
+      return data.map(item => this.makeJsonSafe(item));
+    }
+
+    // Handle Object
+    if (typeof data === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(data)) {
+        // Skip undefined values
+        if (value !== undefined) {
+          result[key] = this.makeJsonSafe(value);
+        }
+      }
+      return result;
+    }
+
+    // Primitive types (string, number, boolean)
+    return data;
   }
 
   /**
