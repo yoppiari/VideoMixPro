@@ -259,6 +259,9 @@ const startServer = async (): Promise<void> => {
     // Clean up stale jobs from previous sessions
     // await cleanupStaleJobs(); // Disabled - schema mismatch with project.status field
 
+    // Resume pending jobs that were lost during restart
+    await resumePendingJobs();
+
     // Start production services
     // if (process.env.NODE_ENV === 'production') {
     //   cleanupService.start();
@@ -274,6 +277,67 @@ const startServer = async (): Promise<void> => {
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
+  }
+};
+
+// Resume pending jobs that were interrupted by server restart
+const resumePendingJobs = async (): Promise<void> => {
+  try {
+    logger.info('[STARTUP] Checking for pending jobs to resume...');
+
+    const pendingJobs = await prisma.processingJob.findMany({
+      where: {
+        status: 'PENDING'
+      },
+      include: {
+        project: {
+          include: {
+            videos: true,
+            groups: {
+              include: {
+                videos: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (pendingJobs.length === 0) {
+      logger.info('[STARTUP] No pending jobs found');
+      return;
+    }
+
+    logger.info(`[STARTUP] Found ${pendingJobs.length} pending jobs - resuming processing...`);
+
+    // Get the video processing service instance
+    const { VideoProcessingService } = await import('@/services/video-processing.service');
+    const videoProcessingService = new VideoProcessingService();
+
+    for (const job of pendingJobs) {
+      try {
+        logger.info(`[STARTUP] Resuming job ${job.id} for project ${job.projectId}`);
+
+        // Parse settings from JSON string
+        const settings = job.settings ? JSON.parse(job.settings) : {};
+
+        // Re-queue the job
+        await videoProcessingService.queueProcessingJob(job.id, {
+          projectId: job.projectId,
+          outputCount: job.outputCount,
+          settings
+        });
+
+        logger.info(`[STARTUP] Job ${job.id} re-queued successfully`);
+      } catch (error) {
+        logger.error(`[STARTUP] Failed to resume job ${job.id}:`, error);
+      }
+    }
+
+    logger.info(`[STARTUP] Finished resuming ${pendingJobs.length} pending jobs`);
+  } catch (error) {
+    logger.error('[STARTUP] Failed to resume pending jobs:', error);
+    // Don't prevent server startup on resume failure
   }
 };
 
