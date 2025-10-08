@@ -20,7 +20,7 @@ import processingRoutes from '@/routes/processing.routes';
 // import paymentRoutes from '@/routes/payment.routes'; // Disabled - missing Payment model
 // import adminRoutes from '@/routes/admin.routes'; // Disabled - missing EmailLog/Payment models
 import healthRoutes from '@/routes/health';
-// import groupRoutes from '@/routes/group.routes'; // Disabled - missing VideoFile model
+import groupRoutes from '@/routes/group.routes';
 // import voiceOverRoutes from '@/routes/voice-over.routes'; // Disabled - incomplete implementation
 
 // Production services
@@ -156,7 +156,7 @@ app.use('/api/v1/auth', authRateLimit, authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/projects', projectRoutes);
 app.use('/api/v1/videos', videoRoutes);
-// app.use('/api/v1/groups', groupRoutes); // Disabled - missing VideoFile model
+app.use('/api/v1/groups', groupRoutes);
 app.use('/api/v1/processing', processingRoutes);
 // app.use('/api/v1/voiceover', voiceOverRoutes); // Disabled - incomplete implementation
 // app.use('/api/v1/payments', paymentRoutes); // Disabled - missing Payment model

@@ -111,11 +111,10 @@ export class GroupController {
         where: {
           id: groupId,
           project: { userId }
+        },
+        include: {
+          videos: true
         }
-        // DISABLED: include videoFiles - VideoFile model not in schema
-        // include: {
-        //   videoFiles: true
-        // }
       });
 
       if (!group) {
@@ -123,13 +122,13 @@ export class GroupController {
         return;
       }
 
-      // DISABLED: Unassign all videos from this group - VideoFile model not in schema
-      // if (group.videoFiles.length > 0) {
-      //   await prisma.videoFile.updateMany({
-      //     where: { groupId },
-      //     data: { groupId: null }
-      //   });
-      // }
+      // Unassign all videos from this group
+      if (group.videos.length > 0) {
+        await prisma.video.updateMany({
+          where: { groupId },
+          data: { groupId: null }
+        });
+      }
 
       // Delete the group
       await prisma.videoGroup.delete({
@@ -166,18 +165,17 @@ export class GroupController {
       // Get all groups with their videos
       const groups = await prisma.videoGroup.findMany({
         where: { projectId },
-        // DISABLED: include videoFiles - VideoFile model not in schema
-        // include: {
-        //   videoFiles: {
-        //     select: {
-        //       id: true,
-        //       originalName: true,
-        //       duration: true,
-        //       size: true,
-        //       uploadedAt: true
-        //     }
-        //   }
-        // },
+        include: {
+          videos: {
+            select: {
+              id: true,
+              originalName: true,
+              duration: true,
+              size: true,
+              uploadedAt: true
+            }
+          }
+        },
         orderBy: { order: 'asc' }
       });
 
