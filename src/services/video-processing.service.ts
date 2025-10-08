@@ -1258,7 +1258,11 @@ export class VideoProcessingService {
     for (const group of groups) {
       if (group.videos && group.videos.length > 0) {
         const randomVideo = group.videos[Math.floor(Math.random() * group.videos.length)];
-        selectedVideos.push(randomVideo);
+        // Ensure video has path property for FFmpeg
+        selectedVideos.push({
+          ...randomVideo,
+          path: randomVideo.path || `uploads/${randomVideo.filename}`
+        });
       }
     }
 
