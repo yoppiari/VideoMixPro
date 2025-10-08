@@ -1256,8 +1256,8 @@ export class VideoProcessingService {
 
     // Select one random video from each group in order
     for (const group of groups) {
-      if (group.videoFiles.length > 0) {
-        const randomVideo = group.videoFiles[Math.floor(Math.random() * group.videoFiles.length)];
+      if (group.videos && group.videos.length > 0) {
+        const randomVideo = group.videos[Math.floor(Math.random() * group.videos.length)];
         selectedVideos.push(randomVideo);
       }
     }
@@ -1284,7 +1284,7 @@ export class VideoProcessingService {
       const outputName = `voice_over_output_${outputIndex + 1}_${timestamp}`;
 
       // Create a variant with different starting video for variety
-      const videos = project.videoFiles;
+      const videos = project.videos;
       let orderedVideos = [...videos];
 
       // Rotate videos for different starting points if enabled
