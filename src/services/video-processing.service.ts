@@ -186,7 +186,18 @@ export class VideoProcessingService {
       await prisma.processingJob.update({
         where: { id: jobId },
         data: { errorMessage: '[TRACE-0.5] Before async IIFE' }
-      }).catch(() => {});
+      }).catch((err) => {
+        logger.error(`[TRACE] Failed to write TRACE-0.5: ${err.message}`);
+      });
+
+      // Verify Prisma connection works before starting background processing
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        logger.info(`[QUEUE] Prisma connection verified for job ${jobId}`);
+      } catch (err) {
+        logger.error(`[QUEUE] Prisma connection failed for job ${jobId}:`, err);
+        throw new Error(`Database connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
 
       // Process immediately in background without waiting for response
       // Using async IIFE to avoid blocking the API response
