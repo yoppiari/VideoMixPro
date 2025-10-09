@@ -558,14 +558,17 @@ export class VideoProcessingService {
 
   private async processVideo(jobId: string, data: ProcessingJobData): Promise<void> {
     logger.info(`[PROCESS] processVideo started for job ${jobId}, projectId: ${data.projectId}`);
+    console.log(`[PROCESS] processVideo started for job ${jobId}, projectId: ${data.projectId}`);
     this.activeJobs.set(jobId, true);
     let project: any = undefined; // Declare project outside try block
 
     try {
       logger.info(`[PROCESS] Updating job status to PROCESSING for job ${jobId}`);
+      console.log(`[PROCESS] Updating job status to PROCESSING for job ${jobId}`);
       await this.updateJobStatusWithDetails(jobId, JobStatus.PROCESSING, 0, 'Initializing video processing');
 
       logger.info(`[PROCESS] Fetching project ${data.projectId} from database`);
+      console.log(`[PROCESS] Fetching project ${data.projectId} from database`);
       project = await prisma.project.findUnique({
         where: { id: data.projectId },
         include: {
@@ -585,6 +588,7 @@ export class VideoProcessingService {
       });
 
       logger.info(`[PROCESS] Project fetched. Project exists: ${!!project}`);
+      console.log(`[PROCESS] Project fetched. Project exists: ${!!project}`);
 
       if (!project) {
         throw new Error('Project not found');
@@ -597,15 +601,18 @@ export class VideoProcessingService {
       console.log('Videos count:', project.videos?.length || 0);
       console.log('Videos:', JSON.stringify(project.videos || [], null, 2));
       console.log('Groups count:', project.groups?.length || 0);
+      console.log('Groups detail:', JSON.stringify(project.groups || [], null, 2));
       console.log('=== END PROJECT DATA ===');
 
       // Store debug info in job for troubleshooting
+      const groupsDebug = project.groups?.map((g: any) => `${g.name}:${g.videos?.length || 0}vids`).join(', ') || 'no groups';
       await prisma.processingJob.update({
         where: { id: jobId },
         data: {
-          errorMessage: `[DEBUG] Starting - ${project.videos?.length || 0} videos, ${project.groups?.length || 0} groups`
+          errorMessage: `[DEBUG] ${project.videos?.length || 0} vids, ${project.groups?.length || 0} groups (${groupsDebug})`
         }
       });
+      console.log(`[DEBUG] Stored in job: ${project.videos?.length || 0} vids, ${project.groups?.length || 0} groups (${groupsDebug})`);
 
       const settings = data.settings;
       const outputs: string[] = [];
