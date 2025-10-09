@@ -142,6 +142,12 @@ export class VideoProcessingService {
     try {
       logger.info(`[QUEUE] Starting queue for job ${jobId}`);
 
+      // EMERGENCY TRACE 0: Queue started
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: '[TRACE-0] Queue started' }
+      }).catch(() => {});
+
       // Check if job is already cancelled or completed
       const job = await prisma.processingJob.findUnique({
         where: { id: jobId },
@@ -174,21 +180,29 @@ export class VideoProcessingService {
       // Mark job as active
       this.activeJobs.set(jobId, true);
 
-      console.log(`[QUEUE] Starting immediate processing for job ${jobId}`);
       logger.info(`[QUEUE] Starting immediate processing for job ${jobId}`);
+
+      // EMERGENCY TRACE 0.5: Before IIFE
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: '[TRACE-0.5] Before async IIFE' }
+      }).catch(() => {});
 
       // Process immediately in background without waiting for response
       // Using async IIFE to avoid blocking the API response
       (async () => {
         try {
-          console.log(`[BACKGROUND] Starting processVideo for job ${jobId}`);
+          // EMERGENCY TRACE 0.7: Inside IIFE
+          await prisma.processingJob.update({
+            where: { id: jobId },
+            data: { errorMessage: '[TRACE-0.7] Inside async IIFE, calling processVideo' }
+          }).catch(() => {});
+
           logger.info(`[BACKGROUND] Starting processVideo for job ${jobId}`);
           await this.processVideo(jobId, data);
-          console.log(`[BACKGROUND] Completed processVideo for job ${jobId}`);
           logger.info(`[BACKGROUND] Completed processVideo for job ${jobId}`);
         } catch (error) {
           // Catch any unhandled errors from processVideo
-          console.error(`[BACKGROUND] Unhandled error in processVideo for job ${jobId}:`, error);
           logger.error(`[BACKGROUND] Unhandled error in processVideo for job ${jobId}:`, error);
 
           // Try to update job status with the actual error
@@ -197,7 +211,7 @@ export class VideoProcessingService {
               where: { id: jobId },
               data: {
                 status: JobStatus.FAILED,
-                errorMessage: error instanceof Error ? error.message : 'Unknown error in background processing',
+                errorMessage: `[TRACE-ERROR] ${error instanceof Error ? error.message : 'Unknown error'}`,
                 completedAt: new Date()
               }
             });
@@ -205,15 +219,21 @@ export class VideoProcessingService {
             logger.error(`Failed to update job ${jobId} after unhandled error:`, updateError);
           }
         }
-      })().catch((err) => {
-        console.error(`[QUEUE] Fatal error in background processing for job ${jobId}:`, err);
+      })().catch(async (err) => {
         logger.error(`[QUEUE] Fatal error in background processing for job ${jobId}:`, err);
+        await prisma.processingJob.update({
+          where: { id: jobId },
+          data: { errorMessage: `[TRACE-FATAL] ${err instanceof Error ? err.message : 'Fatal error'}` }
+        }).catch(() => {});
       });
 
       logger.info(`[QUEUE] Job ${jobId} queued successfully - processing in background`);
     } catch (error) {
-      console.error(`[QUEUE] Failed to queue job ${jobId}:`, error);
       logger.error(`Failed to queue job ${jobId}:`, error);
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: `[TRACE-QUEUE-ERROR] ${error instanceof Error ? error.message : 'Queue error'}` }
+      }).catch(() => {});
     }
   }
 
