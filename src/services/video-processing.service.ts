@@ -558,17 +558,33 @@ export class VideoProcessingService {
 
   private async processVideo(jobId: string, data: ProcessingJobData): Promise<void> {
     logger.info(`[PROCESS] processVideo started for job ${jobId}, projectId: ${data.projectId}`);
-    console.log(`[PROCESS] processVideo started for job ${jobId}, projectId: ${data.projectId}`);
     this.activeJobs.set(jobId, true);
     let project: any = undefined; // Declare project outside try block
 
     try {
+      // EMERGENCY LOG 1: Started
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: '[TRACE-1] Started processVideo' }
+      }).catch(() => {});
+
       logger.info(`[PROCESS] Updating job status to PROCESSING for job ${jobId}`);
-      console.log(`[PROCESS] Updating job status to PROCESSING for job ${jobId}`);
       await this.updateJobStatusWithDetails(jobId, JobStatus.PROCESSING, 0, 'Initializing video processing');
 
+      // EMERGENCY LOG 2: Status updated
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: '[TRACE-2] Status updated to PROCESSING' }
+      }).catch(() => {});
+
       logger.info(`[PROCESS] Fetching project ${data.projectId} from database`);
-      console.log(`[PROCESS] Fetching project ${data.projectId} from database`);
+
+      // EMERGENCY LOG 3: Before DB query
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: '[TRACE-3] About to fetch project from DB' }
+      }).catch(() => {});
+
       project = await prisma.project.findUnique({
         where: { id: data.projectId },
         include: {
@@ -587,32 +603,38 @@ export class VideoProcessingService {
         }
       });
 
+      // EMERGENCY LOG 4: After DB query
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: `[TRACE-4] Project fetched: ${!!project}` }
+      }).catch(() => {});
+
       logger.info(`[PROCESS] Project fetched. Project exists: ${!!project}`);
-      console.log(`[PROCESS] Project fetched. Project exists: ${!!project}`);
 
       if (!project) {
         throw new Error('Project not found');
       }
 
-      // Debug logging: check what data we got from database
-      console.log('=== PROJECT DATA DEBUG ===');
-      console.log('Project ID:', project.id);
-      console.log('Project Name:', project.name);
-      console.log('Videos count:', project.videos?.length || 0);
-      console.log('Videos:', JSON.stringify(project.videos || [], null, 2));
-      console.log('Groups count:', project.groups?.length || 0);
-      console.log('Groups detail:', JSON.stringify(project.groups || [], null, 2));
-      console.log('=== END PROJECT DATA ===');
-
-      // Store debug info in job for troubleshooting
-      const groupsDebug = project.groups?.map((g: any) => `${g.name}:${g.videos?.length || 0}vids`).join(', ') || 'no groups';
+      // EMERGENCY LOG 5: Project data
+      const videosCount = project.videos?.length || 0;
+      const groupsCount = project.groups?.length || 0;
       await prisma.processingJob.update({
         where: { id: jobId },
-        data: {
-          errorMessage: `[DEBUG] ${project.videos?.length || 0} vids, ${project.groups?.length || 0} groups (${groupsDebug})`
-        }
-      });
-      console.log(`[DEBUG] Stored in job: ${project.videos?.length || 0} vids, ${project.groups?.length || 0} groups (${groupsDebug})`);
+        data: { errorMessage: `[TRACE-5] Got ${videosCount} videos, ${groupsCount} groups` }
+      }).catch(() => {});
+
+      // EMERGENCY LOG 6: Group details
+      const groupsDebug = project.groups?.map((g: any) => {
+        const vCount = g.videos?.length || 0;
+        return `${g.name}:${vCount}vids`;
+      }).join(', ') || 'no groups';
+
+      await prisma.processingJob.update({
+        where: { id: jobId },
+        data: { errorMessage: `[TRACE-6] Groups: ${groupsDebug}` }
+      }).catch(() => {});
+
+      logger.info(`[DEBUG] Project data - Videos: ${videosCount}, Groups: ${groupsDebug}`);
 
       const settings = data.settings;
       const outputs: string[] = [];
