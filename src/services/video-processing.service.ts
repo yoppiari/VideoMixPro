@@ -1255,6 +1255,11 @@ export class VideoProcessingService {
   }
 
   private async processManualMixing(project: any, settings: VideoMixingOptions, index: number): Promise<string> {
+    // FIX #1: Add null check for groups
+    if (!project.groups || !Array.isArray(project.groups)) {
+      throw new Error('Project groups not loaded. Cannot perform manual mixing.');
+    }
+
     const groups = project.groups;
 
     if (groups.length === 0) {
@@ -1262,23 +1267,48 @@ export class VideoProcessingService {
     }
 
     const selectedVideos: any[] = [];
+    // FIX #2: Get upload directory from environment
+    const uploadDir = process.env.UPLOAD_PATH || process.env.UPLOAD_DIR || 'uploads';
 
     // Select one random video from each group in order
     for (const group of groups) {
-      if (group.videos && group.videos.length > 0) {
-        const randomVideo = group.videos[Math.floor(Math.random() * group.videos.length)];
-        // Ensure video has path property for FFmpeg
-        selectedVideos.push({
-          ...randomVideo,
-          path: randomVideo.path || `uploads/${randomVideo.filename}`
-        });
+      // FIX #3: Add null check for group.videos
+      if (!group.videos || !Array.isArray(group.videos) || group.videos.length === 0) {
+        logger.warn(`[Manual Mixing] Group "${group.name}" has no videos, skipping...`);
+        continue;
       }
+
+      const randomVideo = group.videos[Math.floor(Math.random() * group.videos.length)];
+
+      // FIX #4: Construct proper absolute path
+      let videoPath: string;
+      if (randomVideo.path) {
+        // Use existing path if available
+        videoPath = randomVideo.path;
+      } else if (randomVideo.filename) {
+        // Construct from filename
+        videoPath = path.join(uploadDir, randomVideo.filename);
+      } else {
+        logger.error(`[Manual Mixing] Video in group "${group.name}" has no path or filename:`, randomVideo);
+        throw new Error(`Video ${randomVideo.id || 'unknown'} has no path or filename`);
+      }
+
+      // Ensure path is absolute
+      const absolutePath = path.isAbsolute(videoPath) ? videoPath : path.resolve(videoPath);
+
+      logger.info(`[Manual Mixing] Selected video from group "${group.name}": ${randomVideo.originalName || randomVideo.filename} (${absolutePath})`);
+
+      selectedVideos.push({
+        ...randomVideo,
+        path: absolutePath
+      });
     }
 
     if (selectedVideos.length === 0) {
-      throw new Error('No videos found in groups');
+      throw new Error('No videos selected from groups. All groups are empty or have no videos.');
     }
 
+    logger.info(`[Manual Mixing] Processing ${selectedVideos.length} videos from ${groups.length} groups`);
     return this.combineVideos(selectedVideos, settings, `manual_mix_${index + 1}`);
   }
 
