@@ -312,8 +312,8 @@ const resumePendingJobs = async (): Promise<void> => {
         console.log(`[STARTUP RECOVERY] Resuming job ${job.id}`);
         logger.info(`[STARTUP] Resuming job ${job.id} for project ${job.projectId}`);
 
-        // Parse settings from JSON string
-        const settings = job.settings ? JSON.parse(job.settings) : {};
+        // Settings are already parsed by Prisma (JSONB field)
+        const settings = (job.settings || {}) as any;
 
         // Re-queue the job
         await videoProcessingService.queueProcessingJob(job.id, {
