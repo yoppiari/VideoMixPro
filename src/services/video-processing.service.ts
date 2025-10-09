@@ -174,19 +174,22 @@ export class VideoProcessingService {
       // Mark job as active
       this.activeJobs.set(jobId, true);
 
-      logger.info(`[QUEUE] Scheduling processVideo for job ${jobId} via setImmediate`);
+      console.log(`[QUEUE] Starting immediate processing for job ${jobId}`);
+      logger.info(`[QUEUE] Starting immediate processing for job ${jobId}`);
 
-      // In production, this would use Bull Queue or similar
-      // For now, we'll process immediately in background
-      setImmediate(async () => {
+      // Process immediately in background without waiting for response
+      // Using async IIFE to avoid blocking the API response
+      (async () => {
         try {
-          logger.info(`[SETIMMEDIATE] Starting processVideo for job ${jobId}`);
+          console.log(`[BACKGROUND] Starting processVideo for job ${jobId}`);
+          logger.info(`[BACKGROUND] Starting processVideo for job ${jobId}`);
           await this.processVideo(jobId, data);
-          logger.info(`[SETIMMEDIATE] Completed processVideo for job ${jobId}`);
+          console.log(`[BACKGROUND] Completed processVideo for job ${jobId}`);
+          logger.info(`[BACKGROUND] Completed processVideo for job ${jobId}`);
         } catch (error) {
           // Catch any unhandled errors from processVideo
-          logger.error(`[SETIMMEDIATE] Unhandled error in processVideo for job ${jobId}:`, error);
-          console.error('CRITICAL: Unhandled error in setImmediate:', error);
+          console.error(`[BACKGROUND] Unhandled error in processVideo for job ${jobId}:`, error);
+          logger.error(`[BACKGROUND] Unhandled error in processVideo for job ${jobId}:`, error);
 
           // Try to update job status with the actual error
           try {
@@ -194,7 +197,7 @@ export class VideoProcessingService {
               where: { id: jobId },
               data: {
                 status: JobStatus.FAILED,
-                errorMessage: error instanceof Error ? error.message : 'Unknown error in setImmediate',
+                errorMessage: error instanceof Error ? error.message : 'Unknown error in background processing',
                 completedAt: new Date()
               }
             });
@@ -202,8 +205,14 @@ export class VideoProcessingService {
             logger.error(`Failed to update job ${jobId} after unhandled error:`, updateError);
           }
         }
+      })().catch((err) => {
+        console.error(`[QUEUE] Fatal error in background processing for job ${jobId}:`, err);
+        logger.error(`[QUEUE] Fatal error in background processing for job ${jobId}:`, err);
       });
+
+      logger.info(`[QUEUE] Job ${jobId} queued successfully - processing in background`);
     } catch (error) {
+      console.error(`[QUEUE] Failed to queue job ${jobId}:`, error);
       logger.error(`Failed to queue job ${jobId}:`, error);
     }
   }
